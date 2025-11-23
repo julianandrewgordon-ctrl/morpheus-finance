@@ -1,0 +1,35 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Check LocalStorage</title>
+</head>
+<body>
+    <h1>LocalStorage Contents</h1>
+    <div id="output"></div>
+    <script>
+        const output = document.getElementById('output');
+        let html = '<ul>';
+        
+        // Check all localStorage keys
+        for (let i = 0; i < localStorage.length; i++) {
+            const key = localStorage.key(i);
+            if (key.startsWith('finance-manager')) {
+                const value = localStorage.getItem(key);
+                html += `<li><strong>${key}</strong>: ${value.substring(0, 100)}...</li>`;
+            }
+        }
+        
+        html += '</ul>';
+        output.innerHTML = html;
+        
+        // Also log to console
+        console.log('All finance-manager keys:');
+        for (let i = 0; i < localStorage.length; i++) {
+            const key = localStorage.key(i);
+            if (key.startsWith('finance-manager')) {
+                console.log(key, localStorage.getItem(key));
+            }
+        }
+    </script>
+</body>
+</html>
