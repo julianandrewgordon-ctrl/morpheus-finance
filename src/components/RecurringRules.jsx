@@ -216,6 +216,39 @@ export default function RecurringRules({ rules, scenarios, onAddRule, onBatchAdd
     }))
   }
 
+  const handleExportRules = () => {
+    // Export filtered rules in batch upload format
+    const exportLines = filteredRules.map(rule => {
+      // CSV format: Name, Amount, Type, Account, Frequency, Effective Date, End Date, Description
+      return [
+        rule.name,
+        rule.amount,
+        rule.type,
+        rule.account || 'BOA',
+        rule.frequency,
+        rule.effectiveDate || rule.impactDate || '',
+        rule.endDate || '',
+        rule.description || ''
+      ].join(', ')
+    })
+    
+    const csvContent = exportLines.join('\n')
+    const blob = new Blob([csvContent], { type: 'text/csv' })
+    const url = URL.createObjectURL(blob)
+    const link = document.createElement('a')
+    link.href = url
+    link.download = `rules-${viewingScenario.label.replace(/\s+/g, '-')}-${new Date().toISOString().split('T')[0]}.csv`
+    link.click()
+    URL.revokeObjectURL(url)
+    
+    setFlashMessages([{
+      type: 'success',
+      content: `Exported ${filteredRules.length} rule(s) for ${viewingScenario.label}`,
+      dismissible: true,
+      onDismiss: () => setFlashMessages([])
+    }])
+  }
+
   const handleBatchUpload = () => {
     try {
       const lines = batchText.trim().split('\n')
@@ -480,7 +513,7 @@ export default function RecurringRules({ rules, scenarios, onAddRule, onBatchAdd
                 <Button onClick={() => setShowBatchModal(true)} iconName="upload">
                   Batch Upload
                 </Button>
-                <Button onClick={onAddRule}>Export</Button>
+                <Button onClick={handleExportRules} iconName="download">Export Rules</Button>
                 <Button 
                   variant="primary" 
                   iconName="add-plus" 

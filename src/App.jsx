@@ -32,10 +32,18 @@ const getBlankData = () => ({
 })
 
 function App() {
-  // Check if user is already logged in
+  // Always show landing page on initial load
   const storedUser = localStorage.getItem(USER_KEY)
-  const [showLanding, setShowLanding] = useState(!storedUser)
-  const [currentUser, setCurrentUser] = useState(storedUser)
+  const [showLanding, setShowLanding] = useState(true)
+  const [currentUser, setCurrentUser] = useState(null)
+  
+  // Check for stored user after component mounts
+  useEffect(() => {
+    if (storedUser) {
+      setCurrentUser(storedUser)
+      setShowLanding(false)
+    }
+  }, [])
   const [activeHref, setActiveHref] = useState('/dashboard')
   const [currentProfile, setCurrentProfile] = useState({ label: 'Personal', value: 'personal' })
   const [showQuickAdd, setShowQuickAdd] = useState(false)
@@ -366,6 +374,17 @@ function App() {
   }
 
   const handleImportData = (importedData) => {
+    // Save to localStorage immediately before state update
+    if (currentUser) {
+      try {
+        const storageKey = getUserStorageKey(currentUser, 'data')
+        localStorage.setItem(storageKey, JSON.stringify(importedData))
+        console.log('Data saved to localStorage immediately')
+      } catch (error) {
+        console.error('Error saving imported data to localStorage:', error)
+      }
+    }
+    // Also update state for consistency
     setData(importedData)
   }
 
@@ -466,23 +485,10 @@ function App() {
             }
           },
           {
-            type: 'menu-dropdown',
-            text: 'Data',
-            iconName: 'settings',
-            items: [
-              { id: 'export', text: '💾 Export Data', iconName: 'download' },
-              { id: 'reset', text: '🔄 Reset to Defaults', iconName: 'refresh' },
-              { id: 'logout', text: '🚪 Logout', iconName: 'close' }
-            ],
-            onItemClick: (e) => {
-              if (e.detail.id === 'export') {
-                handleExportData()
-              } else if (e.detail.id === 'reset') {
-                handleResetData()
-              } else if (e.detail.id === 'logout') {
-                handleLogout()
-              }
-            }
+            type: 'button',
+            text: 'Logout',
+            iconName: 'close',
+            onClick: handleLogout
           }
         ]}
       />
@@ -500,7 +506,7 @@ function App() {
             items={[
               { type: 'link', text: '📊 Dashboard', href: '/dashboard' },
               { type: 'link', text: '🎯 Scenarios', href: '/scenarios' },
-              { type: 'link', text: '💾 Export', href: '/export' },
+              { type: 'link', text: '💾 Data Management', href: '/export' },
               { type: 'divider' },
               { 
                 type: 'link', 

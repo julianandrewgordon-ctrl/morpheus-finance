@@ -51,17 +51,17 @@ export default function Export({ data, onImportData }) {
         throw new Error('Invalid data format')
       }
       
+      // Call the import handler which will save to localStorage and update state
       onImportData(importedData)
-      setImportText('')
+      
       setFlashMessages([{
         type: 'success',
-        content: 'Data imported successfully! The page will reload.',
+        content: 'Data imported successfully!',
         dismissible: true,
         onDismiss: () => setFlashMessages([])
       }])
       
-      // Reload after a short delay
-      setTimeout(() => window.location.reload(), 1500)
+      setImportText('')
     } catch (error) {
       setFlashMessages([{
         type: 'error',

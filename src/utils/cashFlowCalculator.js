@@ -82,6 +82,7 @@ export function calculateCashFlowTable(rules, startingBalance, startingBalanceDa
         // We'll check all phases to find the earliest one that could generate payments
         let earliestPhaseStart = null
         let latestPhaseEnd = null
+        let hasPhaseWithoutEndDate = false
         
         // Find the overall date range covered by all phases
         rule.paymentSchedule.forEach(phase => {
@@ -92,14 +93,19 @@ export function calculateCashFlowTable(rules, startingBalance, startingBalanceDa
           if (!earliestPhaseStart || phaseStart < earliestPhaseStart) {
             earliestPhaseStart = phaseStart
           }
-          if (!latestPhaseEnd || (phaseEnd && phaseEnd > latestPhaseEnd)) {
+          
+          // If any phase has no end date, the rule continues indefinitely
+          if (!phase.endDate) {
+            hasPhaseWithoutEndDate = true
+          } else if (!latestPhaseEnd || phaseEnd > latestPhaseEnd) {
             latestPhaseEnd = phaseEnd
           }
         })
         
         // Set the effective date to the earliest phase start
         effectiveDate = earliestPhaseStart
-        endDate = latestPhaseEnd
+        // If any phase has no end date, the rule continues indefinitely (endDate = null)
+        endDate = hasPhaseWithoutEndDate ? null : latestPhaseEnd
         
         // Now find which phase is active for this specific date
         const activePhase = rule.paymentSchedule.find(phase => {

@@ -48,7 +48,7 @@ export default function Dashboard({
   // Calculate cash flow table from rules
   const cashFlowData = useMemo(() => {
     const endDate = new Date(cashFlowStartDate)
-    endDate.setDate(endDate.getDate() + 365) // 365 days from start
+    endDate.setFullYear(endDate.getFullYear() + 1) // 1 full year from start
     
     return calculateCashFlowTable(
       data.recurringRules || [],
@@ -63,7 +63,7 @@ export default function Dashboard({
   // Calculate cash flow for each scenario
   const scenarioCashFlows = useMemo(() => {
     const endDate = new Date(cashFlowStartDate)
-    endDate.setDate(endDate.getDate() + 365)
+    endDate.setFullYear(endDate.getFullYear() + 1) // 1 full year from start
     
     const flows = {}
     
