@@ -1,15 +1,25 @@
 import { useMemo } from 'react'
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts'
 
-const SCENARIO_COLORS = {
-  committed: '#3498db',
-  2: '#e74c3c',
-  3: '#2ecc71',
-  4: '#f39c12',
-  5: '#9b59b6',
-  6: '#1abc9c',
-  7: '#e67e22',
-  8: '#34495e'
+const BASE_COLOR = '#3498db'  // Blue for Base Scenario
+
+const SCENARIO_COLORS = [
+  '#e74c3c',   // Red
+  '#2ecc71',   // Green
+  '#f39c12',   // Orange
+  '#9b59b6',   // Purple
+  '#1abc9c',   // Turquoise
+  '#e67e22',   // Dark Orange
+  '#16a085',   // Dark Turquoise
+  '#c0392b',   // Dark Red
+  '#27ae60',   // Dark Green
+  '#d35400',   // Burnt Orange
+  '#8e44ad',   // Deep Purple
+  '#c0392b'    // Crimson
+]
+
+const getScenarioColor = (index) => {
+  return SCENARIO_COLORS[index % SCENARIO_COLORS.length]
 }
 
 export default function BalanceChart({ cashFlowData, startingBalanceDate, scenarioCashFlows, scenarios }) {
@@ -111,21 +121,20 @@ export default function BalanceChart({ cashFlowData, startingBalanceDate, scenar
             <Line 
               type="monotone" 
               dataKey="scenario_committed" 
-              stroke={SCENARIO_COLORS.committed}
-              strokeWidth={2}
+              stroke={BASE_COLOR}
+              strokeWidth={3}
               name="Base Scenario"
               dot={false}
             />
             
             {/* Other Scenarios */}
-            {scenarios && scenarios.filter(s => !s.isBaseline).map(scenario => (
+            {scenarios && scenarios.filter(s => !s.isBaseline).map((scenario, index) => (
               <Line 
                 key={scenario.id}
                 type="monotone" 
                 dataKey={`scenario_${scenario.id}`}
-                stroke={SCENARIO_COLORS[scenario.id] || '#95a5a6'}
-                strokeWidth={2}
-                strokeDasharray="5 5"
+                stroke={getScenarioColor(index)}
+                strokeWidth={3}
                 name={scenario.name}
                 dot={false}
               />

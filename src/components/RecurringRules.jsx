@@ -23,6 +23,7 @@ export default function RecurringRules({ rules, scenarios, onAddRule, onBatchAdd
   const [filteringText, setFilteringText] = useState('')
   const [selectedType, setSelectedType] = useState({ label: 'All Types', value: 'all' })
   const [selectedAccount, setSelectedAccount] = useState({ label: 'All Accounts', value: 'all' })
+  const [viewingScenario, setViewingScenario] = useState({ label: 'Base Scenario', value: 'base' })
   const [showBatchModal, setShowBatchModal] = useState(false)
   const [showEditModal, setShowEditModal] = useState(false)
   const [showScenarioModal, setShowScenarioModal] = useState(false)
@@ -77,11 +78,28 @@ export default function RecurringRules({ rules, scenarios, onAddRule, onBatchAdd
     { label: 'Other', value: 'Other' }
   ]
 
+  // Scenario filter options
+  const scenarioOptions = [
+    { label: 'Base Scenario', value: 'base' },
+    ...scenarios.filter(s => !s.isBaseline).map(s => ({ label: s.name, value: s.id }))
+  ]
+
   const filteredRules = rules.filter(rule => {
     const matchesText = rule.name.toLowerCase().includes(filteringText.toLowerCase())
     const matchesType = selectedType.value === 'all' || rule.type === selectedType.value
     const matchesAccount = selectedAccount.value === 'all' || rule.account === selectedAccount.value
-    return matchesText && matchesType && matchesAccount
+    
+    // Scenario filtering
+    let matchesScenario = false
+    if (viewingScenario.value === 'base') {
+      // Base scenario: show rules without scenario assignment
+      matchesScenario = !rule.scenarioId
+    } else {
+      // Specific scenario: show base rules + scenario-specific rules
+      matchesScenario = !rule.scenarioId || rule.scenarioId === viewingScenario.value
+    }
+    
+    return matchesText && matchesType && matchesAccount && matchesScenario
   })
 
   const formatCurrency = (value) => {
@@ -295,7 +313,7 @@ export default function RecurringRules({ rules, scenarios, onAddRule, onBatchAdd
       id: 'name',
       header: 'Name',
       cell: item => (
-        <div style={{ maxWidth: '180px', overflow: 'hidden' }}>
+        <div style={{ maxWidth: '250px', overflow: 'visible' }}>
           <SpaceBetween size="xxs">
             <Box style={{ wordWrap: 'break-word', whiteSpace: 'normal' }}>
               <span style={{ wordBreak: 'break-word' }}>{item.name}</span>{' '}
@@ -329,7 +347,7 @@ export default function RecurringRules({ rules, scenarios, onAddRule, onBatchAdd
           </SpaceBetween>
         </div>
       ),
-      width: 180
+      width: 250
     },
     {
       id: 'amount',
@@ -455,6 +473,7 @@ export default function RecurringRules({ rules, scenarios, onAddRule, onBatchAdd
         header={
           <Header
             variant="h1"
+            description={`Viewing: ${viewingScenario.label}`}
             counter={`(${filteredRules.length}/${rules.length})`}
             actions={
               <SpaceBetween direction="horizontal" size="xs">
@@ -462,46 +481,60 @@ export default function RecurringRules({ rules, scenarios, onAddRule, onBatchAdd
                   Batch Upload
                 </Button>
                 <Button onClick={onAddRule}>Export</Button>
-                <Button variant="primary" iconName="add-plus" onClick={onAddRule}>
+                <Button 
+                  variant="primary" 
+                  iconName="add-plus" 
+                  onClick={() => onAddRule(viewingScenario.value !== 'base' ? viewingScenario.value : null)}
+                >
                   Add New Rule
                 </Button>
               </SpaceBetween>
             }
           >
-            Recurring Rules
+            Scenarios & Rules
           </Header>
         }
         filter={
-          <SpaceBetween direction="horizontal" size="xs">
-            <TextFilter
-              filteringText={filteringText}
-              filteringPlaceholder="Search rules..."
-              filteringAriaLabel="Filter rules"
-              onChange={({ detail }) => setFilteringText(detail.filteringText)}
-            />
-            <Select
-              selectedOption={selectedType}
-              onChange={({ detail }) => setSelectedType(detail.selectedOption)}
-              options={typeOptions}
-              placeholder="Filter by type"
-            />
-            <Select
-              selectedOption={selectedAccount}
-              onChange={({ detail }) => setSelectedAccount(detail.selectedOption)}
-              options={accountOptions}
-              placeholder="Filter by account"
-            />
-            {(filteringText || selectedType.value !== 'all' || selectedAccount.value !== 'all') && (
-              <Button
-                onClick={() => {
-                  setFilteringText('')
-                  setSelectedType({ label: 'All Types', value: 'all' })
-                  setSelectedAccount({ label: 'All Accounts', value: 'all' })
-                }}
-              >
-                Clear filters
-              </Button>
-            )}
+          <SpaceBetween direction="vertical" size="s">
+            <SpaceBetween direction="horizontal" size="xs">
+              <Select
+                selectedOption={viewingScenario}
+                onChange={({ detail }) => setViewingScenario(detail.selectedOption)}
+                options={scenarioOptions}
+                placeholder="Select scenario"
+              />
+            </SpaceBetween>
+            <SpaceBetween direction="horizontal" size="xs">
+              <TextFilter
+                filteringText={filteringText}
+                filteringPlaceholder="Search rules..."
+                filteringAriaLabel="Filter rules"
+                onChange={({ detail }) => setFilteringText(detail.filteringText)}
+              />
+              <Select
+                selectedOption={selectedType}
+                onChange={({ detail }) => setSelectedType(detail.selectedOption)}
+                options={typeOptions}
+                placeholder="Filter by type"
+              />
+              <Select
+                selectedOption={selectedAccount}
+                onChange={({ detail }) => setSelectedAccount(detail.selectedOption)}
+                options={accountOptions}
+                placeholder="Filter by account"
+              />
+              {(filteringText || selectedType.value !== 'all' || selectedAccount.value !== 'all') && (
+                <Button
+                  onClick={() => {
+                    setFilteringText('')
+                    setSelectedType({ label: 'All Types', value: 'all' })
+                    setSelectedAccount({ label: 'All Accounts', value: 'all' })
+                  }}
+                >
+                  Clear filters
+                </Button>
+              )}
+            </SpaceBetween>
           </SpaceBetween>
         }
         empty={

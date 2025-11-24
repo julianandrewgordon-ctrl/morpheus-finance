@@ -39,6 +39,7 @@ function App() {
   const [activeHref, setActiveHref] = useState('/dashboard')
   const [currentProfile, setCurrentProfile] = useState({ label: 'Personal', value: 'personal' })
   const [showQuickAdd, setShowQuickAdd] = useState(false)
+  const [quickAddScenarioId, setQuickAddScenarioId] = useState(null)
   const [showResetModal, setShowResetModal] = useState(false)
   const [resetConfirmation, setResetConfirmation] = useState('')
   
@@ -152,9 +153,15 @@ function App() {
   const handleAddTransaction = (transaction) => {
     setData(prev => ({
       ...prev,
-      recurringRules: [...prev.recurringRules, { ...transaction, id: Date.now() }]
+      recurringRules: [...prev.recurringRules, { 
+        ...transaction, 
+        id: Date.now(),
+        scenarioId: quickAddScenarioId,
+        isDraft: quickAddScenarioId ? true : false
+      }]
     }))
     setShowQuickAdd(false)
+    setQuickAddScenarioId(null)
   }
 
   const handleBatchAddRules = (rules) => {
@@ -358,6 +365,10 @@ function App() {
     URL.revokeObjectURL(url)
   }
 
+  const handleImportData = (importedData) => {
+    setData(importedData)
+  }
+
   const profileOptions = [
     { id: 'personal', text: '👤 Personal' },
     { id: 'business', text: '🏢 Business' },
@@ -384,12 +395,15 @@ function App() {
             onHideEmptyRowsChange={setHideEmptyRows}
           />
         )
-      case '/rules':
+      case '/scenarios':
         return (
           <RecurringRules 
             rules={data.recurringRules}
             scenarios={data.scenarios}
-            onAddRule={() => setShowQuickAdd(true)}
+            onAddRule={(scenarioId) => {
+              setQuickAddScenarioId(scenarioId)
+              setShowQuickAdd(true)
+            }}
             onBatchAdd={handleBatchAddRules}
             onDeleteRule={handleDeleteRule}
             onToggleInclude={handleToggleInclude}
@@ -397,7 +411,7 @@ function App() {
           />
         )
       case '/export':
-        return <Export profile={currentProfile.label} />
+        return <Export data={data} onImportData={handleImportData} />
       default:
         return (
           <Dashboard 
@@ -485,7 +499,7 @@ function App() {
             }}
             items={[
               { type: 'link', text: '📊 Dashboard', href: '/dashboard' },
-              { type: 'link', text: '📋 Recurring Rules', href: '/rules' },
+              { type: 'link', text: '🎯 Scenarios', href: '/scenarios' },
               { type: 'link', text: '💾 Export', href: '/export' },
               { type: 'divider' },
               { 
@@ -505,8 +519,13 @@ function App() {
       />
       {showQuickAdd && (
         <QuickAddModal 
-          onClose={() => setShowQuickAdd(false)}
+          onClose={() => {
+            setShowQuickAdd(false)
+            setQuickAddScenarioId(null)
+          }}
           onAdd={handleAddTransaction}
+          scenarioId={quickAddScenarioId}
+          scenarios={data.scenarios}
         />
       )}
       

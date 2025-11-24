@@ -1,175 +1,231 @@
+import { useState } from 'react'
 import Container from '@cloudscape-design/components/container'
 import Header from '@cloudscape-design/components/header'
 import SpaceBetween from '@cloudscape-design/components/space-between'
-import Button from '@cloudscape-design/components/button'
-import FormField from '@cloudscape-design/components/form-field'
-import Select from '@cloudscape-design/components/select'
-import Input from '@cloudscape-design/components/input'
-import Checkbox from '@cloudscape-design/components/checkbox'
-import DatePicker from '@cloudscape-design/components/date-picker'
 import Box from '@cloudscape-design/components/box'
-import { useState } from 'react'
+import Button from '@cloudscape-design/components/button'
+import Textarea from '@cloudscape-design/components/textarea'
+import Alert from '@cloudscape-design/components/alert'
+import Flashbar from '@cloudscape-design/components/flashbar'
+import ColumnLayout from '@cloudscape-design/components/column-layout'
 
-export default function Export({ profile }) {
-  const [selectedProfile, setSelectedProfile] = useState({ label: profile, value: profile.toLowerCase() })
-  const [includeActive, setIncludeActive] = useState(true)
-  const [includeInactive, setIncludeInactive] = useState(true)
-  const [includeDraft, setIncludeDraft] = useState(true)
-  const [includeDescriptions, setIncludeDescriptions] = useState(true)
-  const [fromDate, setFromDate] = useState('2025/05/24')
-  const [toDate, setToDate] = useState('2025/12/31')
-  const [includeDailyTotals, setIncludeDailyTotals] = useState(true)
-  const [includeRunningBalance, setIncludeRunningBalance] = useState(true)
-  const [includeOverrides, setIncludeOverrides] = useState(true)
-  const [includeScenarioData, setIncludeScenarioData] = useState(false)
+export default function Export({ data, onImportData }) {
+  const [importText, setImportText] = useState('')
+  const [flashMessages, setFlashMessages] = useState([])
 
-  const profileOptions = [
-    { label: 'Personal', value: 'personal' },
-    { label: 'Business', value: 'business' },
-    { label: 'Rental Property', value: 'rental' }
-  ]
-
-  const handleExportRules = () => {
-    alert('Exporting recurring rules to CSV...')
+  const handleExport = () => {
+    const dataStr = JSON.stringify(data, null, 2)
+    const dataBlob = new Blob([dataStr], { type: 'application/json' })
+    const url = URL.createObjectURL(dataBlob)
+    const link = document.createElement('a')
+    link.href = url
+    link.download = `morpheus-finance-backup-${new Date().toISOString().split('T')[0]}.json`
+    link.click()
+    URL.revokeObjectURL(url)
+    
+    setFlashMessages([{
+      type: 'success',
+      content: 'Data exported successfully!',
+      dismissible: true,
+      onDismiss: () => setFlashMessages([])
+    }])
   }
 
-  const handleExportCashFlow = () => {
-    alert('Exporting cash flow data to CSV...')
+  const handleCopyToClipboard = () => {
+    const dataStr = JSON.stringify(data, null, 2)
+    navigator.clipboard.writeText(dataStr)
+    setFlashMessages([{
+      type: 'success',
+      content: 'Data copied to clipboard!',
+      dismissible: true,
+      onDismiss: () => setFlashMessages([])
+    }])
   }
 
-  const handleExportAll = () => {
-    alert('Exporting all profiles to ZIP...')
+  const handleImport = () => {
+    try {
+      const importedData = JSON.parse(importText)
+      
+      // Validate the data structure
+      if (!importedData.recurringRules || !importedData.scenarios) {
+        throw new Error('Invalid data format')
+      }
+      
+      onImportData(importedData)
+      setImportText('')
+      setFlashMessages([{
+        type: 'success',
+        content: 'Data imported successfully! The page will reload.',
+        dismissible: true,
+        onDismiss: () => setFlashMessages([])
+      }])
+      
+      // Reload after a short delay
+      setTimeout(() => window.location.reload(), 1500)
+    } catch (error) {
+      setFlashMessages([{
+        type: 'error',
+        content: `Import failed: ${error.message}. Please check your data format.`,
+        dismissible: true,
+        onDismiss: () => setFlashMessages([])
+      }])
+    }
+  }
+
+  const dataStats = {
+    rules: data.recurringRules?.length || 0,
+    scenarios: data.scenarios?.length || 0,
+    historicalEntries: data.historicalCashFlows?.length || 0,
+    startingBalance: data.startingBalance || 0
   }
 
   return (
-    <SpaceBetween size="l">
-      <Header variant="h1">Export Data</Header>
+    <>
+      <Flashbar items={flashMessages} />
+      <SpaceBetween size="l">
+        <Header variant="h1">Export & Import Data</Header>
+        
+        {/* Current Data Summary */}
+        <Container
+          header={
+            <Header variant="h2">
+              Current Data Summary
+            </Header>
+          }
+        >
+          <ColumnLayout columns={4} variant="text-grid">
+            <div>
+              <Box variant="awsui-key-label">Recurring Rules</Box>
+              <Box variant="h1" fontSize="display-l">{dataStats.rules}</Box>
+            </div>
+            <div>
+              <Box variant="awsui-key-label">Scenarios</Box>
+              <Box variant="h1" fontSize="display-l">{dataStats.scenarios}</Box>
+            </div>
+            <div>
+              <Box variant="awsui-key-label">Historical Entries</Box>
+              <Box variant="h1" fontSize="display-l">{dataStats.historicalEntries}</Box>
+            </div>
+            <div>
+              <Box variant="awsui-key-label">Starting Balance</Box>
+              <Box variant="h1" fontSize="display-l">${dataStats.startingBalance.toLocaleString()}</Box>
+            </div>
+          </ColumnLayout>
+        </Container>
 
-      {/* Export Recurring Rules */}
-      <Container
-        header={
-          <Header variant="h2">
-            Export Recurring Rules
-          </Header>
-        }
-      >
-        <SpaceBetween size="m">
-          <FormField label="Profile">
-            <Select
-              selectedOption={selectedProfile}
-              onChange={({ detail }) => setSelectedProfile(detail.selectedOption)}
-              options={profileOptions}
-            />
-          </FormField>
-
-          <FormField label="Include">
-            <SpaceBetween size="xs">
-              <Checkbox checked={includeActive} onChange={({ detail }) => setIncludeActive(detail.checked)}>
-                Active rules
-              </Checkbox>
-              <Checkbox checked={includeInactive} onChange={({ detail }) => setIncludeInactive(detail.checked)}>
-                Inactive/Excluded rules
-              </Checkbox>
-              <Checkbox checked={includeDraft} onChange={({ detail }) => setIncludeDraft(detail.checked)}>
-                Draft/Scenario rules
-              </Checkbox>
-              <Checkbox checked={includeDescriptions} onChange={({ detail }) => setIncludeDescriptions(detail.checked)}>
-                Descriptions/Notes
-              </Checkbox>
+        {/* Export Section */}
+        <Container
+          header={
+            <Header
+              variant="h2"
+              description="Download your financial data as a backup file"
+            >
+              Export Data
+            </Header>
+          }
+        >
+          <SpaceBetween size="m">
+            <Alert type="info">
+              Export creates a JSON file containing all your rules, scenarios, balances, and settings. 
+              Keep this file safe as a backup or to transfer data between devices.
+            </Alert>
+            
+            <SpaceBetween direction="horizontal" size="xs">
+              <Button variant="primary" iconName="download" onClick={handleExport}>
+                Download Backup File
+              </Button>
+              <Button iconName="copy" onClick={handleCopyToClipboard}>
+                Copy to Clipboard
+              </Button>
             </SpaceBetween>
-          </FormField>
 
-          <FormField label="File name">
-            <Input
-              value={`${selectedProfile.label}_Recurring_Rules_2025-11-21.csv`}
-              readOnly
-            />
-          </FormField>
+            <Box variant="p" color="text-body-secondary">
+              <strong>What's included:</strong>
+              <ul>
+                <li>All recurring rules and payment schedules</li>
+                <li>All scenarios and their configurations</li>
+                <li>Starting balance and date</li>
+                <li>Historical cash flow entries</li>
+                <li>User preferences</li>
+              </ul>
+            </Box>
+          </SpaceBetween>
+        </Container>
 
-          <Button variant="primary" iconName="download" onClick={handleExportRules}>
-            Export Recurring Rules to CSV
-          </Button>
-        </SpaceBetween>
-      </Container>
+        {/* Import Section */}
+        <Container
+          header={
+            <Header
+              variant="h2"
+              description="Restore data from a backup file"
+            >
+              Import Data
+            </Header>
+          }
+        >
+          <SpaceBetween size="m">
+            <Alert type="warning">
+              <strong>Warning:</strong> Importing will replace ALL your current data. 
+              Make sure to export your current data first if you want to keep it.
+            </Alert>
 
-      {/* Export Cash Flow Data */}
-      <Container
-        header={
-          <Header variant="h2">
-            Export Cash Flow Data
-          </Header>
-        }
-      >
-        <SpaceBetween size="m">
-          <FormField label="Date Range">
-            <SpaceBetween size="xs" direction="horizontal">
-              <FormField label="From">
-                <DatePicker
-                  value={fromDate}
-                  onChange={({ detail }) => setFromDate(detail.value)}
-                  placeholder="YYYY/MM/DD"
-                />
-              </FormField>
-              <FormField label="To">
-                <DatePicker
-                  value={toDate}
-                  onChange={({ detail }) => setToDate(detail.value)}
-                  placeholder="YYYY/MM/DD"
-                />
-              </FormField>
+            <SpaceBetween size="s">
+              <Box variant="p">
+                Paste the contents of your backup JSON file below:
+              </Box>
+              <Textarea
+                value={importText}
+                onChange={({ detail }) => setImportText(detail.value)}
+                placeholder='Paste your exported JSON data here...'
+                rows={10}
+              />
             </SpaceBetween>
-          </FormField>
 
-          <FormField label="Include">
-            <SpaceBetween size="xs">
-              <Checkbox checked={includeDailyTotals} onChange={({ detail }) => setIncludeDailyTotals(detail.checked)}>
-                Daily totals
-              </Checkbox>
-              <Checkbox checked={includeRunningBalance} onChange={({ detail }) => setIncludeRunningBalance(detail.checked)}>
-                Running balance
-              </Checkbox>
-              <Checkbox checked={includeOverrides} onChange={({ detail }) => setIncludeOverrides(detail.checked)}>
-                Balance overrides
-              </Checkbox>
-              <Checkbox checked={includeScenarioData} onChange={({ detail }) => setIncludeScenarioData(detail.checked)}>
-                Include draft/scenario data
-              </Checkbox>
-            </SpaceBetween>
-          </FormField>
+            <Button 
+              variant="primary" 
+              iconName="upload"
+              onClick={handleImport}
+              disabled={!importText.trim()}
+            >
+              Import Data
+            </Button>
 
-          <FormField label="File name">
-            <Input
-              value={`${selectedProfile.label}_CashFlow_05-24_12-31-2025.csv`}
-              readOnly
-            />
-          </FormField>
+            <Box variant="p" color="text-body-secondary" fontSize="body-s">
+              <strong>How to import:</strong>
+              <ol>
+                <li>Open your backup JSON file in a text editor</li>
+                <li>Copy all the contents (Ctrl+A, Ctrl+C)</li>
+                <li>Paste into the text area above</li>
+                <li>Click "Import Data"</li>
+              </ol>
+            </Box>
+          </SpaceBetween>
+        </Container>
 
-          <Button variant="primary" iconName="download" onClick={handleExportCashFlow}>
-            Export Cash Flow to CSV
-          </Button>
-        </SpaceBetween>
-      </Container>
-
-      {/* Export All Profiles */}
-      <Container
-        header={
-          <Header variant="h2">
-            Export All Profiles
-          </Header>
-        }
-      >
-        <SpaceBetween size="m">
-          <Box variant="p">
-            Export all profiles including recurring rules and cash flow data as a ZIP archive.
-          </Box>
-          <Box variant="p" color="text-body-secondary">
-            Profiles to export: Personal, Business, Rental Property (3 profiles)
-          </Box>
-          <Button variant="primary" iconName="download" onClick={handleExportAll}>
-            Export All Profiles (ZIP)
-          </Button>
-        </SpaceBetween>
-      </Container>
-    </SpaceBetween>
+        {/* Best Practices */}
+        <Container
+          header={
+            <Header variant="h2">
+              Backup Best Practices
+            </Header>
+          }
+        >
+          <SpaceBetween size="s">
+            <Box variant="p">
+              💾 <strong>Regular Backups:</strong> Export your data weekly or after making significant changes
+            </Box>
+            <Box variant="p">
+              📁 <strong>Multiple Copies:</strong> Keep backups in different locations (cloud storage, external drive)
+            </Box>
+            <Box variant="p">
+              📅 <strong>Date Your Files:</strong> The export automatically includes the date in the filename
+            </Box>
+            <Box variant="p">
+              🔒 <strong>Secure Storage:</strong> Your financial data is sensitive - store backups securely
+            </Box>
+          </SpaceBetween>
+        </Container>
+      </SpaceBetween>
+    </>
   )
 }

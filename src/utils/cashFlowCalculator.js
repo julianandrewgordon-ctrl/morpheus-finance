@@ -78,10 +78,34 @@ export function calculateCashFlowTable(rules, startingBalance, startingBalanceDa
       
       // Check if rule has payment schedule
       if (rule.paymentSchedule && rule.paymentSchedule.length > 0) {
-        // Find active phase for this date
+        // For payment schedules, we need to find which phase applies to this date
+        // We'll check all phases to find the earliest one that could generate payments
+        let earliestPhaseStart = null
+        let latestPhaseEnd = null
+        
+        // Find the overall date range covered by all phases
+        rule.paymentSchedule.forEach(phase => {
+          // Parse dates as local dates to avoid timezone issues
+          const phaseStart = new Date(phase.startDate + 'T00:00:00')
+          const phaseEnd = phase.endDate ? new Date(phase.endDate + 'T00:00:00') : null
+          
+          if (!earliestPhaseStart || phaseStart < earliestPhaseStart) {
+            earliestPhaseStart = phaseStart
+          }
+          if (!latestPhaseEnd || (phaseEnd && phaseEnd > latestPhaseEnd)) {
+            latestPhaseEnd = phaseEnd
+          }
+        })
+        
+        // Set the effective date to the earliest phase start
+        effectiveDate = earliestPhaseStart
+        endDate = latestPhaseEnd
+        
+        // Now find which phase is active for this specific date
         const activePhase = rule.paymentSchedule.find(phase => {
-          const phaseStart = new Date(phase.startDate)
-          const phaseEnd = phase.endDate ? new Date(phase.endDate) : null
+          // Parse dates as local dates to avoid timezone issues
+          const phaseStart = new Date(phase.startDate + 'T00:00:00')
+          const phaseEnd = phase.endDate ? new Date(phase.endDate + 'T00:00:00') : null
           return date >= phaseStart && (!phaseEnd || date <= phaseEnd)
         })
         
@@ -92,8 +116,6 @@ export function calculateCashFlowTable(rules, startingBalance, startingBalanceDa
         if (isNaN(phaseAmount)) return // Skip if amount is not a valid number
         
         amount = phaseAmount
-        effectiveDate = new Date(activePhase.startDate)
-        endDate = activePhase.endDate ? new Date(activePhase.endDate) : null
       } else {
         // Use legacy single amount/date
         if (rule.frequency === 'One-time') {

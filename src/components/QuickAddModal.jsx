@@ -11,7 +11,10 @@ import DatePicker from '@cloudscape-design/components/date-picker'
 import Textarea from '@cloudscape-design/components/textarea'
 import Checkbox from '@cloudscape-design/components/checkbox'
 
-export default function QuickAddModal({ onClose, onAdd }) {
+export default function QuickAddModal({ onClose, onAdd, scenarioId, scenarios }) {
+  const scenarioName = scenarioId 
+    ? scenarios.find(s => s.id === scenarioId)?.name 
+    : 'Base Scenario'
   const [formData, setFormData] = useState({
     name: '',
     amount: '',
@@ -77,7 +80,7 @@ export default function QuickAddModal({ onClose, onAdd }) {
     <Modal
       onDismiss={onClose}
       visible={true}
-      header="Add New Transaction"
+      header={`Add New Rule${scenarioId ? ` to ${scenarioName}` : ' to Base Scenario'}`}
       footer={
         <Box float="right">
           <SpaceBetween direction="horizontal" size="xs">
