@@ -107,6 +107,8 @@ function App() {
           .upsert({
             user_id: user.id,
             data: data
+          }, {
+            onConflict: 'user_id'
           })
         
         if (error) {
@@ -134,6 +136,8 @@ function App() {
             user_id: user.id,
             start_date: cashFlowStartDate,
             hide_empty_rows: hideEmptyRows
+          }, {
+            onConflict: 'user_id'
           })
         
         if (error) {
