@@ -9,49 +9,80 @@ import Icon from '@cloudscape-design/components/icon'
 import FormField from '@cloudscape-design/components/form-field'
 import Input from '@cloudscape-design/components/input'
 import Alert from '@cloudscape-design/components/alert'
+import Tabs from '@cloudscape-design/components/tabs'
+import { supabase } from '../lib/supabase'
 
 export default function LandingPage({ onEnter }) {
   const [isAnimating, setIsAnimating] = useState(false)
-  const [username, setUsername] = useState('')
+  const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [error, setError] = useState('')
+  const [success, setSuccess] = useState('')
   const [isLoading, setIsLoading] = useState(false)
+  const [activeTab, setActiveTab] = useState('signin')
 
-  const handleLogin = () => {
+  const handleSignIn = async () => {
     setError('')
+    setSuccess('')
     setIsLoading(true)
     
-    // Simple validation - you can replace with real authentication
-    setTimeout(() => {
-      const trimmedUsername = username.trim().toLowerCase()
-      const trimmedPassword = password.trim()
+    try {
+      const { data, error } = await supabase.auth.signInWithPassword({
+        email: email.trim(),
+        password: password
+      })
       
-      if (username.trim() === '' || password.trim() === '') {
-        setError('Please enter both username and password')
-        setIsLoading(false)
-      } else if (trimmedUsername === 'julian.jonea.gordon@gmail.com' && trimmedPassword === 'Gratitude1') {
-        // Julian's account - loads existing data
-        handleEnter('julian')
-      } else if (trimmedUsername === 'admin' && trimmedPassword === 'admin') {
-        // Admin account - blank slate
-        handleEnter('admin')
-      } else {
-        setError(`Invalid username or password. You entered: "${trimmedUsername}"`)
-        setIsLoading(false)
+      if (error) throw error
+      
+      if (data.user) {
+        handleEnter(data.user)
       }
-    }, 500)
+    } catch (error) {
+      setError(error.message || 'Failed to sign in')
+      setIsLoading(false)
+    }
   }
 
-  const handleEnter = (loggedInUsername) => {
+  const handleSignUp = async () => {
+    setError('')
+    setSuccess('')
+    setIsLoading(true)
+    
+    try {
+      const { data, error } = await supabase.auth.signUp({
+        email: email.trim(),
+        password: password
+      })
+      
+      if (error) throw error
+      
+      if (data.user) {
+        setSuccess('Account created successfully! Signing you in...')
+        // Auto sign in after signup
+        setTimeout(() => {
+          handleEnter(data.user)
+        }, 1000)
+      }
+    } catch (error) {
+      setError(error.message || 'Failed to create account')
+      setIsLoading(false)
+    }
+  }
+
+  const handleEnter = (user) => {
     setIsAnimating(true)
     setTimeout(() => {
-      onEnter(loggedInUsername)
+      onEnter(user)
     }, 800)
   }
 
   const handleKeyPress = (e) => {
     if (e.key === 'Enter') {
-      handleLogin()
+      if (activeTab === 'signin') {
+        handleSignIn()
+      } else {
+        handleSignUp()
+      }
     }
   }
 
@@ -144,7 +175,7 @@ export default function LandingPage({ onEnter }) {
                   </Box>
                 </div>
 
-                {/* Login Form */}
+                {/* Login/Signup Form */}
                 <div style={{ maxWidth: '400px', margin: '0 auto' }}>
                   <SpaceBetween size="m">
                     {error && (
@@ -153,45 +184,109 @@ export default function LandingPage({ onEnter }) {
                       </Alert>
                     )}
                     
-                    <FormField label={<span style={{ color: '#e0d0ff' }}>Username</span>}>
-                      <Input
-                        value={username}
-                        onChange={({ detail }) => setUsername(detail.value)}
-                        placeholder="Enter username"
-                        onKeyPress={handleKeyPress}
-                        disabled={isLoading}
-                      />
-                    </FormField>
+                    {success && (
+                      <Alert type="success" dismissible onDismiss={() => setSuccess('')}>
+                        {success}
+                      </Alert>
+                    )}
+                    
+                    <Tabs
+                      activeTabId={activeTab}
+                      onChange={({ detail }) => {
+                        setActiveTab(detail.activeTabId)
+                        setError('')
+                        setSuccess('')
+                      }}
+                      tabs={[
+                        {
+                          id: 'signin',
+                          label: 'Sign In',
+                          content: (
+                            <SpaceBetween size="m">
+                              <FormField label={<span style={{ color: '#e0d0ff' }}>Email</span>}>
+                                <Input
+                                  value={email}
+                                  onChange={({ detail }) => setEmail(detail.value)}
+                                  placeholder="your@email.com"
+                                  type="email"
+                                  onKeyPress={handleKeyPress}
+                                  disabled={isLoading}
+                                />
+                              </FormField>
 
-                    <FormField label={<span style={{ color: '#e0d0ff' }}>Password</span>}>
-                      <Input
-                        value={password}
-                        onChange={({ detail }) => setPassword(detail.value)}
-                        placeholder="Enter password"
-                        type="password"
-                        onKeyPress={handleKeyPress}
-                        disabled={isLoading}
-                      />
-                    </FormField>
+                              <FormField label={<span style={{ color: '#e0d0ff' }}>Password</span>}>
+                                <Input
+                                  value={password}
+                                  onChange={({ detail }) => setPassword(detail.value)}
+                                  placeholder="Enter password"
+                                  type="password"
+                                  onKeyPress={handleKeyPress}
+                                  disabled={isLoading}
+                                />
+                              </FormField>
 
-                    <div style={{ textAlign: 'center' }}>
-                      <Button
-                        variant="primary"
-                        onClick={handleLogin}
-                        iconAlign="right"
-                        iconName="angle-right"
-                        loading={isLoading}
-                        fullWidth
-                      >
-                        Sign In
-                      </Button>
-                    </div>
+                              <div style={{ textAlign: 'center' }}>
+                                <Button
+                                  variant="primary"
+                                  onClick={handleSignIn}
+                                  iconAlign="right"
+                                  iconName="angle-right"
+                                  loading={isLoading}
+                                  fullWidth
+                                >
+                                  Sign In
+                                </Button>
+                              </div>
+                            </SpaceBetween>
+                          )
+                        },
+                        {
+                          id: 'signup',
+                          label: 'Sign Up',
+                          content: (
+                            <SpaceBetween size="m">
+                              <FormField label={<span style={{ color: '#e0d0ff' }}>Email</span>}>
+                                <Input
+                                  value={email}
+                                  onChange={({ detail }) => setEmail(detail.value)}
+                                  placeholder="your@email.com"
+                                  type="email"
+                                  onKeyPress={handleKeyPress}
+                                  disabled={isLoading}
+                                />
+                              </FormField>
 
-                    <Box textAlign="center" variant="small">
-                      <span style={{ color: '#9370db' }}>
-                        Admin account: admin/admin (blank slate)
-                      </span>
-                    </Box>
+                              <FormField 
+                                label={<span style={{ color: '#e0d0ff' }}>Password</span>}
+                                constraintText="Minimum 6 characters"
+                              >
+                                <Input
+                                  value={password}
+                                  onChange={({ detail }) => setPassword(detail.value)}
+                                  placeholder="Create password"
+                                  type="password"
+                                  onKeyPress={handleKeyPress}
+                                  disabled={isLoading}
+                                />
+                              </FormField>
+
+                              <div style={{ textAlign: 'center' }}>
+                                <Button
+                                  variant="primary"
+                                  onClick={handleSignUp}
+                                  iconAlign="right"
+                                  iconName="angle-right"
+                                  loading={isLoading}
+                                  fullWidth
+                                >
+                                  Create Account
+                                </Button>
+                              </div>
+                            </SpaceBetween>
+                          )
+                        }
+                      ]}
+                    />
                   </SpaceBetween>
                 </div>
               </SpaceBetween>

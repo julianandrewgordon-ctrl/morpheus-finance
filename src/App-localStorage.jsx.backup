@@ -14,7 +14,12 @@ import Dashboard from './components/Dashboard'
 import RecurringRules from './components/RecurringRules'
 import Export from './components/Export'
 import QuickAddModal from './components/QuickAddModal'
-import { supabase } from './lib/supabase'
+import { mockData } from './data/mockData'
+
+const USER_KEY = 'finance-manager-current-user'
+
+// Helper functions for user-specific storage
+const getUserStorageKey = (username, key) => `finance-manager-${username}-${key}`
 
 const getBlankData = () => ({
   startingBalance: 0,
@@ -27,126 +32,131 @@ const getBlankData = () => ({
 })
 
 function App() {
-  const [user, setUser] = useState(null)
-  const [loading, setLoading] = useState(true)
+  // Always show landing page on initial load
+  const storedUser = localStorage.getItem(USER_KEY)
+  const [showLanding, setShowLanding] = useState(true)
+  const [currentUser, setCurrentUser] = useState(null)
+  
+  // Check for stored user after component mounts
+  useEffect(() => {
+    if (storedUser) {
+      setCurrentUser(storedUser)
+      setShowLanding(false)
+    }
+  }, [])
   const [activeHref, setActiveHref] = useState('/dashboard')
   const [currentProfile, setCurrentProfile] = useState({ label: 'Personal', value: 'personal' })
   const [showQuickAdd, setShowQuickAdd] = useState(false)
   const [quickAddScenarioId, setQuickAddScenarioId] = useState(null)
   const [showResetModal, setShowResetModal] = useState(false)
   const [resetConfirmation, setResetConfirmation] = useState('')
-  const [data, setData] = useState(getBlankData())
+  
+  // Load data based on current user
+  const [data, setData] = useState(() => {
+    if (!currentUser) return mockData
+    
+    try {
+      const storageKey = getUserStorageKey(currentUser, 'data')
+      const saved = localStorage.getItem(storageKey)
+      
+      if (saved) {
+        return JSON.parse(saved)
+      } else {
+        // For admin, return blank data; for julian, return mockData
+        return currentUser === 'admin' ? getBlankData() : mockData
+      }
+    } catch (error) {
+      console.error('Error loading data from localStorage:', error)
+      return currentUser === 'admin' ? getBlankData() : mockData
+    }
+  })
+  
   const [navigationOpen, setNavigationOpen] = useState(true)
-  const [cashFlowStartDate, setCashFlowStartDate] = useState('2025-11-20')
-  const [hideEmptyRows, setHideEmptyRows] = useState(false)
   
-  // Check for existing session on mount
-  useEffect(() => {
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      setUser(session?.user ?? null)
-      setLoading(false)
-    })
-
-    const {
-      data: { subscription },
-    } = supabase.auth.onAuthStateChange((_event, session) => {
-      setUser(session?.user ?? null)
-    })
-
-    return () => subscription.unsubscribe()
-  }, [])
-  
-  // Load data from Supabase when user changes
-  useEffect(() => {
-    if (!user) return
-    
-    const loadData = async () => {
-      try {
-        // Load financial data
-        const { data: financialData, error: dataError } = await supabase
-          .from('financial_data')
-          .select('data')
-          .eq('user_id', user.id)
-          .single()
-        
-        if (dataError && dataError.code !== 'PGRST116') { // PGRST116 = no rows
-          console.error('Error loading financial data:', dataError)
-        } else if (financialData) {
-          setData(financialData.data)
-        }
-        
-        // Load preferences
-        const { data: prefs, error: prefsError } = await supabase
-          .from('user_preferences')
-          .select('*')
-          .eq('user_id', user.id)
-          .single()
-        
-        if (prefsError && prefsError.code !== 'PGRST116') {
-          console.error('Error loading preferences:', prefsError)
-        } else if (prefs) {
-          if (prefs.start_date) setCashFlowStartDate(prefs.start_date)
-          if (prefs.hide_empty_rows !== null) setHideEmptyRows(prefs.hide_empty_rows)
-        }
-      } catch (error) {
-        console.error('Error in loadData:', error)
-      }
+  // Load start date from user-specific localStorage
+  const [cashFlowStartDate, setCashFlowStartDate] = useState(() => {
+    if (!currentUser) return '2025-05-24'
+    try {
+      const storageKey = getUserStorageKey(currentUser, 'start-date')
+      return localStorage.getItem(storageKey) || '2025-05-24'
+    } catch (error) {
+      return '2025-05-24'
     }
-    
-    loadData()
-  }, [user])
+  })
   
-  // Save data to Supabase whenever it changes
-  useEffect(() => {
-    if (!user) return
-    
-    const saveData = async () => {
-      try {
-        const { error } = await supabase
-          .from('financial_data')
-          .upsert({
-            user_id: user.id,
-            data: data
-          })
-        
-        if (error) {
-          console.error('Error saving data:', error)
-        }
-      } catch (error) {
-        console.error('Error in saveData:', error)
-      }
+  // Load hide empty rows preference from user-specific localStorage
+  const [hideEmptyRows, setHideEmptyRows] = useState(() => {
+    if (!currentUser) return false
+    try {
+      const storageKey = getUserStorageKey(currentUser, 'hide-empty-rows')
+      const saved = localStorage.getItem(storageKey)
+      return saved === 'true'
+    } catch (error) {
+      return false
     }
-    
-    // Debounce saves
-    const timeoutId = setTimeout(saveData, 1000)
-    return () => clearTimeout(timeoutId)
-  }, [data, user])
+  })
   
-  // Save preferences to Supabase
+  // Save data to user-specific localStorage whenever it changes
   useEffect(() => {
-    if (!user) return
-    
-    const savePreferences = async () => {
-      try {
-        const { error } = await supabase
-          .from('user_preferences')
-          .upsert({
-            user_id: user.id,
-            start_date: cashFlowStartDate,
-            hide_empty_rows: hideEmptyRows
-          })
-        
-        if (error) {
-          console.error('Error saving preferences:', error)
-        }
-      } catch (error) {
-        console.error('Error in savePreferences:', error)
-      }
+    if (!currentUser) return
+    try {
+      const storageKey = getUserStorageKey(currentUser, 'data')
+      localStorage.setItem(storageKey, JSON.stringify(data))
+    } catch (error) {
+      console.error('Error saving data to localStorage:', error)
     }
+  }, [data, currentUser])
+  
+  // Save start date to user-specific localStorage whenever it changes
+  useEffect(() => {
+    if (!currentUser) return
+    try {
+      const storageKey = getUserStorageKey(currentUser, 'start-date')
+      localStorage.setItem(storageKey, cashFlowStartDate)
+    } catch (error) {
+      console.error('Error saving start date to localStorage:', error)
+    }
+  }, [cashFlowStartDate, currentUser])
+  
+  // Save hide empty rows preference to user-specific localStorage whenever it changes
+  useEffect(() => {
+    if (!currentUser) return
+    try {
+      const storageKey = getUserStorageKey(currentUser, 'hide-empty-rows')
+      localStorage.setItem(storageKey, hideEmptyRows.toString())
+    } catch (error) {
+      console.error('Error saving hide empty rows preference to localStorage:', error)
+    }
+  }, [hideEmptyRows, currentUser])
+  
+  // Load user data when user changes
+  useEffect(() => {
+    if (!currentUser) return
     
-    const timeoutId = setTimeout(savePreferences, 1000)
-    return () => clearTimeout(timeoutId)
-  }, [cashFlowStartDate, hideEmptyRows, user])
+    try {
+      const storageKey = getUserStorageKey(currentUser, 'data')
+      const saved = localStorage.getItem(storageKey)
+      
+      if (saved) {
+        setData(JSON.parse(saved))
+      } else {
+        // Initialize data for new user
+        const initialData = currentUser === 'admin' ? getBlankData() : mockData
+        setData(initialData)
+      }
+      
+      // Load user-specific preferences
+      const startDateKey = getUserStorageKey(currentUser, 'start-date')
+      const savedStartDate = localStorage.getItem(startDateKey)
+      if (savedStartDate) setCashFlowStartDate(savedStartDate)
+      
+      const hideRowsKey = getUserStorageKey(currentUser, 'hide-empty-rows')
+      const savedHideRows = localStorage.getItem(hideRowsKey)
+      if (savedHideRows) setHideEmptyRows(savedHideRows === 'true')
+    } catch (error) {
+      console.error('Error loading user data:', error)
+    }
+  }, [currentUser])
 
   const handleAddTransaction = (transaction) => {
     setData(prev => ({
@@ -214,6 +224,7 @@ function App() {
     setData(prev => ({
       ...prev,
       scenarios: prev.scenarios.filter(scenario => scenario.id !== scenarioId),
+      // Also remove scenario assignments from rules
       recurringRules: prev.recurringRules.map(rule => 
         rule.scenarioId === scenarioId 
           ? { ...rule, scenarioId: null, isDraft: false }
@@ -251,43 +262,129 @@ function App() {
     }))
   }
 
-  const handleLogout = async () => {
-    await supabase.auth.signOut()
-    setUser(null)
-    setData(getBlankData())
+  const handleLogin = (username) => {
+    console.log('=== LOGIN DEBUG ===')
+    console.log('Username:', username)
+    
+    // List all finance-manager keys in localStorage
+    console.log('All localStorage keys:')
+    for (let i = 0; i < localStorage.length; i++) {
+      const key = localStorage.key(i)
+      if (key && key.startsWith('finance-manager')) {
+        console.log(`  ${key}: ${localStorage.getItem(key)?.substring(0, 50)}...`)
+      }
+    }
+    
+    let didMigrate = false
+    
+    // Migrate old data to new user-specific storage for julian
+    if (username === 'julian') {
+      const oldDataKey = 'finance-manager-data'
+      const oldStartDateKey = 'finance-manager-start-date'
+      const oldHideRowsKey = 'finance-manager-hide-empty-rows'
+      
+      const newDataKey = getUserStorageKey('julian', 'data')
+      const newStartDateKey = getUserStorageKey('julian', 'start-date')
+      const newHideRowsKey = getUserStorageKey('julian', 'hide-empty-rows')
+      
+      console.log('Looking for old data at:', oldDataKey)
+      console.log('Will save to:', newDataKey)
+      
+      // Check if old data exists
+      const oldData = localStorage.getItem(oldDataKey)
+      
+      if (oldData) {
+        console.log('Found old data, migrating...')
+        // Always migrate from old storage if it exists (overwrites new storage)
+        localStorage.setItem(newDataKey, oldData)
+        console.log('✓ Migrated data for julian user')
+        didMigrate = true
+        
+        const oldStartDate = localStorage.getItem(oldStartDateKey)
+        if (oldStartDate) {
+          localStorage.setItem(newStartDateKey, oldStartDate)
+          console.log('✓ Migrated start date')
+        }
+        
+        const oldHideRows = localStorage.getItem(oldHideRowsKey)
+        if (oldHideRows) {
+          localStorage.setItem(newHideRowsKey, oldHideRows)
+          console.log('✓ Migrated hide rows preference')
+        }
+      } else {
+        console.log('⚠ No old data found at', oldDataKey)
+        console.log('Will use mockData as default')
+      }
+    }
+    
+    // Set user in localStorage FIRST before any reload
+    localStorage.setItem(USER_KEY, username)
+    
+    console.log('=== END LOGIN DEBUG ===')
+    
+    // Force reload to ensure migrated data is loaded
+    if (didMigrate) {
+      console.log('Reloading to load migrated data...')
+      window.location.reload()
+      return // Don't set state if we're reloading
+    }
+    
+    setCurrentUser(username)
+  }
+
+  const handleLogout = () => {
+    setCurrentUser(null)
+    localStorage.removeItem(USER_KEY)
+    setShowLanding(true)
   }
 
   const handleResetData = () => {
     setShowResetModal(true)
   }
 
-  const handleConfirmReset = async () => {
-    if (resetConfirmation === 'RESET' && user) {
-      try {
-        // Delete from Supabase
-        await supabase
-          .from('financial_data')
-          .delete()
-          .eq('user_id', user.id)
-        
-        await supabase
-          .from('user_preferences')
-          .delete()
-          .eq('user_id', user.id)
-        
-        // Reset local state
-        setData(getBlankData())
-        setCashFlowStartDate('2025-11-20')
-        setHideEmptyRows(false)
-        setShowResetModal(false)
-        setResetConfirmation('')
-      } catch (error) {
-        console.error('Error resetting data:', error)
-      }
+  const handleConfirmReset = () => {
+    if (resetConfirmation === 'RESET' && currentUser) {
+      const dataKey = getUserStorageKey(currentUser, 'data')
+      const startDateKey = getUserStorageKey(currentUser, 'start-date')
+      const hideRowsKey = getUserStorageKey(currentUser, 'hide-empty-rows')
+      
+      localStorage.removeItem(dataKey)
+      localStorage.removeItem(startDateKey)
+      localStorage.removeItem(hideRowsKey)
+      
+      const resetData = currentUser === 'admin' ? getBlankData() : mockData
+      setData(resetData)
+      setCashFlowStartDate('2025-05-24')
+      setHideEmptyRows(false)
+      setShowResetModal(false)
+      setResetConfirmation('')
+      window.location.reload()
     }
   }
 
+  const handleExportData = () => {
+    const dataStr = JSON.stringify(data, null, 2)
+    const dataBlob = new Blob([dataStr], { type: 'application/json' })
+    const url = URL.createObjectURL(dataBlob)
+    const link = document.createElement('a')
+    link.href = url
+    link.download = `finance-data-${new Date().toISOString().split('T')[0]}.json`
+    link.click()
+    URL.revokeObjectURL(url)
+  }
+
   const handleImportData = (importedData) => {
+    // Save to localStorage immediately before state update
+    if (currentUser) {
+      try {
+        const storageKey = getUserStorageKey(currentUser, 'data')
+        localStorage.setItem(storageKey, JSON.stringify(importedData))
+        console.log('Data saved to localStorage immediately')
+      } catch (error) {
+        console.error('Error saving imported data to localStorage:', error)
+      }
+    }
+    // Also update state for consistency
     setData(importedData)
   }
 
@@ -355,22 +452,11 @@ function App() {
     }
   }
 
-  if (loading) {
-    return (
-      <div style={{ 
-        minHeight: '100vh', 
-        display: 'flex', 
-        alignItems: 'center', 
-        justifyContent: 'center',
-        background: 'linear-gradient(135deg, #1a0033 0%, #2d1b4e 50%, #1a0033 100%)'
-      }}>
-        <Box variant="h1" color="text-body-secondary">Loading...</Box>
-      </div>
-    )
-  }
-
-  if (!user) {
-    return <LandingPage onEnter={setUser} />
+  if (showLanding) {
+    return <LandingPage onEnter={(username) => {
+      handleLogin(username)
+      setShowLanding(false)
+    }} />
   }
 
   return (
@@ -378,7 +464,7 @@ function App() {
       <TopNavigation
         identity={{
           href: '/',
-          title: `🔮 Morpheus - Financial Planning (${user.email})`,
+          title: `🔮 Morpheus - Financial Planning ${currentUser ? `(${currentUser})` : ''}`,
         }}
         utilities={[
           {
@@ -449,6 +535,7 @@ function App() {
         />
       )}
       
+      {/* Reset Data Confirmation Modal */}
       <Modal
         visible={showResetModal}
         onDismiss={() => {
@@ -489,12 +576,13 @@ function App() {
               <li>Starting balance and date</li>
               <li>All preferences and settings</li>
             </ul>
+            The application will reload with default mock data.
           </Alert>
           
           <Box variant="p">
             <strong>Before proceeding:</strong>
             <ol>
-              <li>Export your data using the "Data Management" page</li>
+              <li>Export your data using the "Export Data" option</li>
               <li>Save the exported file in a safe location</li>
               <li>Only then proceed with the reset</li>
             </ol>
@@ -510,6 +598,10 @@ function App() {
               placeholder="Type RESET in capital letters"
             />
           </FormField>
+          
+          <Box variant="p" color="text-body-secondary" fontSize="body-s">
+            After reset, you can import your exported data if needed.
+          </Box>
         </SpaceBetween>
       </Modal>
     </>
