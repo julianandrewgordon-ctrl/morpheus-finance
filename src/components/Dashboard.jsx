@@ -31,7 +31,7 @@ export default function Dashboard({
   hideEmptyRows,
   onHideEmptyRowsChange
 }) {
-  const [selectedScenario, setSelectedScenario] = useState('committed')
+  const [selectedScenario, setSelectedScenario] = useState('base')
   const [showScenarioModal, setShowScenarioModal] = useState(false)
   const [showNewScenarioModal, setShowNewScenarioModal] = useState(false)
   const [showStartingBalanceModal, setShowStartingBalanceModal] = useState(false)
@@ -69,7 +69,7 @@ export default function Dashboard({
     
     // Calculate for base scenario (baseline)
     // Base Scenario = rules WITHOUT scenario assignment AND include = ON
-    flows['committed'] = calculateCashFlowTable(
+    flows['base'] = calculateCashFlowTable(
       (data.recurringRules || []).filter(rule => !rule.scenarioId && rule.include),
       data.startingBalance || 0,
       data.startingBalanceDate || cashFlowStartDate,
@@ -333,7 +333,16 @@ export default function Dashboard({
           }
         >
           <SpaceBetween size="xs" direction="horizontal">
-            {scenarios.map(scenario => (
+            {/* Base Scenario Button */}
+            <Button
+              variant={selectedScenario === 'base' ? 'primary' : 'normal'}
+              onClick={() => setSelectedScenario('base')}
+            >
+              {selectedScenario === 'base' ? '⦿' : '○'} Base Scenario
+            </Button>
+            
+            {/* Other Scenario Buttons */}
+            {scenarios.filter(s => !s.isBaseline).map(scenario => (
               <SpaceBetween key={scenario.id} size="xxs" direction="horizontal">
                 <Button
                   variant={selectedScenario === scenario.id ? 'primary' : 'normal'}
@@ -341,13 +350,11 @@ export default function Dashboard({
                 >
                   {selectedScenario === scenario.id ? '⦿' : '○'} {scenario.name}
                 </Button>
-                {!scenario.isBaseline && (
-                  <Button
-                    variant="icon"
-                    iconName="edit"
-                    onClick={() => handleEditScenario(scenario)}
-                  />
-                )}
+                <Button
+                  variant="icon"
+                  iconName="edit"
+                  onClick={() => handleEditScenario(scenario)}
+                />
               </SpaceBetween>
             ))}
             <Button disabled>○ (Empty)</Button>
@@ -372,6 +379,7 @@ export default function Dashboard({
               startingBalanceDate={data.startingBalanceDate || cashFlowStartDate}
               scenarioCashFlows={scenarioCashFlows}
               scenarios={scenarios}
+              selectedScenario={selectedScenario}
             />
             <SpaceBetween size="xs" direction="horizontal">
               <Box variant="span">
@@ -407,7 +415,7 @@ export default function Dashboard({
         >
           <SpaceBetween size="m">
             <CashFlowTable 
-              data={cashFlowData} 
+              data={selectedScenario === 'base' ? scenarioCashFlows['base'] : (scenarioCashFlows[selectedScenario] || cashFlowData)}
               startDate={cashFlowStartDate}
               hideEmptyRows={hideEmptyRows}
               onHideEmptyRowsChange={onHideEmptyRowsChange}

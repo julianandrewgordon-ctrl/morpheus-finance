@@ -22,7 +22,7 @@ const getScenarioColor = (index) => {
   return SCENARIO_COLORS[index % SCENARIO_COLORS.length]
 }
 
-export default function BalanceChart({ cashFlowData, startingBalanceDate, scenarioCashFlows, scenarios }) {
+export default function BalanceChart({ cashFlowData, startingBalanceDate, scenarioCashFlows, scenarios, selectedScenario }) {
   // Prepare chart data from cash flow data
   const chartData = useMemo(() => {
     const startDate = new Date(startingBalanceDate)
@@ -135,9 +135,10 @@ export default function BalanceChart({ cashFlowData, startingBalanceDate, scenar
             {/* Base Scenario */}
             <Line 
               type="monotone" 
-              dataKey="scenario_committed" 
+              dataKey="scenario_base" 
               stroke={BASE_COLOR}
-              strokeWidth={3}
+              strokeWidth={selectedScenario === 'base' ? 5 : 2}
+              strokeOpacity={selectedScenario === 'base' ? 1 : 0.4}
               name="Base Scenario"
               dot={false}
             />
@@ -149,7 +150,8 @@ export default function BalanceChart({ cashFlowData, startingBalanceDate, scenar
                 type="monotone" 
                 dataKey={`scenario_${scenario.id}`}
                 stroke={getScenarioColor(index)}
-                strokeWidth={3}
+                strokeWidth={selectedScenario === scenario.id ? 5 : 2}
+                strokeOpacity={selectedScenario === scenario.id ? 1 : 0.4}
                 name={scenario.name}
                 dot={false}
               />

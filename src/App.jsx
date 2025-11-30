@@ -56,6 +56,21 @@ function App() {
     return () => subscription.unsubscribe()
   }, [])
   
+  // Logout when window/tab is closed
+  useEffect(() => {
+    const handleBeforeUnload = async () => {
+      if (user) {
+        await supabase.auth.signOut()
+      }
+    }
+    
+    window.addEventListener('beforeunload', handleBeforeUnload)
+    
+    return () => {
+      window.removeEventListener('beforeunload', handleBeforeUnload)
+    }
+  }, [user])
+  
   // Load data from Supabase when user changes
   useEffect(() => {
     if (!user) return
