@@ -110,10 +110,13 @@ export default function Dashboard({
     return flows
   }, [data.recurringRules, data.startingBalance, data.startingBalanceDate, cashFlowStartDate, data.historicalCashFlows, scenarios])
 
-  // Calculate summary from cash flow data
+  // Calculate summary from cash flow data based on selected scenario
   const summary = useMemo(() => {
-    return calculateSummary(cashFlowData, data.startingBalance || 0)
-  }, [cashFlowData, data.startingBalance])
+    const scenarioData = selectedScenario === 'base' 
+      ? scenarioCashFlows['base'] 
+      : (scenarioCashFlows[selectedScenario] || cashFlowData)
+    return calculateSummary(scenarioData || cashFlowData, data.startingBalance || 0)
+  }, [cashFlowData, data.startingBalance, selectedScenario, scenarioCashFlows])
 
   const handleCreateNewScenario = () => {
     if (newScenarioName.trim()) {
