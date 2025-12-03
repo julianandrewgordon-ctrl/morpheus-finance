@@ -23,7 +23,8 @@ const getBlankData = () => ({
     { id: 1, name: 'Base Scenario', active: true, isBaseline: true }
   ],
   historicalCashFlows: [],
-  recurringRules: []
+  recurringRules: [],
+  ruleOverrides: []
 })
 
 function App() {
