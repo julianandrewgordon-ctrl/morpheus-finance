@@ -52,7 +52,7 @@ export default function QuickAddModal({ onClose, onAdd, scenarioId, scenarios })
       endDate: formData.endDate || null,
       description: formData.description,
       isDraft: formData.isDraft,
-      scenarioId: formData.isDraft ? formData.scenario.value : null,
+      scenarioIds: formData.isDraft && formData.scenario.value ? [formData.scenario.value] : [],
       include: true
     })
   }

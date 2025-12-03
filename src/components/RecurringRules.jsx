@@ -5,6 +5,7 @@ import Button from '@cloudscape-design/components/button'
 import SpaceBetween from '@cloudscape-design/components/space-between'
 import TextFilter from '@cloudscape-design/components/text-filter'
 import Select from '@cloudscape-design/components/select'
+import Multiselect from '@cloudscape-design/components/multiselect'
 import Box from '@cloudscape-design/components/box'
 import Badge from '@cloudscape-design/components/badge'
 import ButtonDropdown from '@cloudscape-design/components/button-dropdown'
@@ -47,7 +48,7 @@ export default function RecurringRules({
   const [flashMessages, setFlashMessages] = useState([])
   const [editingRule, setEditingRule] = useState(null)
   const [editingRuleForScenario, setEditingRuleForScenario] = useState(null)
-  const [selectedScenario, setSelectedScenario] = useState(null)
+  const [selectedScenarios, setSelectedScenarios] = useState([])
   const [overrideRule, setOverrideRule] = useState(null)
   
   // Edit form state
@@ -110,10 +111,12 @@ export default function RecurringRules({
     let matchesScenario = false
     if (viewingScenario.value === 'base') {
       // Base scenario: show rules without scenario assignment
-      matchesScenario = !rule.scenarioId
+      matchesScenario = !rule.scenarioIds || rule.scenarioIds.length === 0
     } else {
       // Specific scenario: show base rules + scenario-specific rules
-      matchesScenario = !rule.scenarioId || rule.scenarioId === viewingScenario.value
+      const isBaseRule = !rule.scenarioIds || rule.scenarioIds.length === 0
+      const isInScenario = rule.scenarioIds && rule.scenarioIds.includes(viewingScenario.value)
+      matchesScenario = isBaseRule || isInScenario
     }
     
     return matchesText && matchesType && matchesAccount && matchesScenario
@@ -363,7 +366,7 @@ export default function RecurringRules({
       id: 'name',
       header: 'Name',
       cell: item => {
-        const isOverridden = !item.scenarioId && viewingScenario.value !== 'base' && hasOverride(ruleOverrides, item.id, viewingScenario.value)
+        const isOverridden = (!item.scenarioIds || item.scenarioIds.length === 0) && viewingScenario.value !== 'base' && hasOverride(ruleOverrides, item.id, viewingScenario.value)
         
         return (
           <div style={{ 
@@ -376,11 +379,16 @@ export default function RecurringRules({
             <SpaceBetween size="xxs">
               <Box style={{ wordWrap: 'break-word', whiteSpace: 'normal' }}>
                 <span style={{ wordBreak: 'break-word' }}>{item.name}</span>{' '}
-                {!item.scenarioId && <Badge color="green">Base</Badge>}
-                {item.scenarioId && (
-                  <Badge color="blue">
-                    {scenarios.find(s => s.id === item.scenarioId)?.name || 'Scenario'}
-                  </Badge>
+                {(!item.scenarioIds || item.scenarioIds.length === 0) && <Badge color="green">Base</Badge>}
+                {item.scenarioIds && item.scenarioIds.length > 0 && scenarios && (
+                  item.scenarioIds.map(scenarioId => {
+                    const scenario = scenarios.find(s => s.id === scenarioId)
+                    return scenario ? (
+                      <Badge key={scenarioId} color="blue">
+                        {scenario.name}
+                      </Badge>
+                    ) : null
+                  })
                 )}
                 {isOverridden && <Badge color="blue">Modified</Badge>}
                 {item.paymentSchedule && item.paymentSchedule.length > 0 && (
@@ -520,14 +528,13 @@ export default function RecurringRules({
               } else if (detail.id === 'edit') {
                 handleEditRule(item)
               } else if (detail.id === 'scenario') {
-                const currentScenario = item.scenarioId 
-                  ? scenarios.find(s => s.id === item.scenarioId)
-                  : null
+                const currentScenarios = item.scenarioIds && scenarios
+                  ? scenarios
+                      .filter(s => !s.isBaseline && item.scenarioIds.includes(s.id))
+                      .map(s => ({ label: s.name, value: s.id }))
+                  : []
                 setEditingRuleForScenario(item)
-                setSelectedScenario(currentScenario 
-                  ? { label: currentScenario.name, value: currentScenario.id }
-                  : null
-                )
+                setSelectedScenarios(currentScenarios)
                 setShowScenarioModal(true)
               } else if (detail.id === 'override') {
                 setOverrideRule(item)
@@ -852,9 +859,9 @@ export default function RecurringRules({
         onDismiss={() => {
           setShowScenarioModal(false)
           setEditingRuleForScenario(null)
-          setSelectedScenario(null)
+          setSelectedScenarios([])
         }}
-        header="Assign Rule to Scenario"
+        header="Assign Rule to Scenarios"
         footer={
           <Box float="right">
             <SpaceBetween direction="horizontal" size="xs">
@@ -863,7 +870,7 @@ export default function RecurringRules({
                 onClick={() => {
                   setShowScenarioModal(false)
                   setEditingRuleForScenario(null)
-                  setSelectedScenario(null)
+                  setSelectedScenarios([])
                 }}
               >
                 Cancel
@@ -872,18 +879,19 @@ export default function RecurringRules({
                 variant="primary" 
                 onClick={() => {
                   if (editingRuleForScenario) {
+                    const scenarioIds = selectedScenarios.map(s => s.value)
                     onUpdateRule(editingRuleForScenario.id, { 
-                      scenarioId: selectedScenario?.value || null,
-                      isDraft: selectedScenario?.value ? true : false
+                      scenarioIds: scenarioIds,
+                      isDraft: scenarioIds.length > 0
                     })
                     setShowScenarioModal(false)
                     setEditingRuleForScenario(null)
-                    setSelectedScenario(null)
+                    setSelectedScenarios([])
                     setFlashMessages([{
                       type: 'success',
-                      content: selectedScenario 
-                        ? `Assigned "${editingRuleForScenario.name}" to ${selectedScenario.label}` 
-                        : `Removed scenario assignment from "${editingRuleForScenario.name}"`,
+                      content: scenarioIds.length > 0
+                        ? `Assigned "${editingRuleForScenario.name}" to ${scenarioIds.length} scenario(s)` 
+                        : `Removed scenario assignments from "${editingRuleForScenario.name}"`,
                       dismissible: true,
                       onDismiss: () => setFlashMessages([])
                     }])
@@ -901,23 +909,22 @@ export default function RecurringRules({
             <strong>Base Scenario Rules:</strong> Rules without scenario assignment are included in all scenarios by default.
           </Box>
           <Box variant="p">
-            <strong>Scenario-Specific Rules:</strong> Assign a rule to a scenario to add it ONLY to that scenario (e.g., car payment for "Car Purchase" scenario).
+            <strong>Scenario-Specific Rules:</strong> Assign a rule to one or more scenarios to add it ONLY to those scenarios.
           </Box>
-          <FormField label="Assign to Scenario" constraintText="Select a scenario to make this rule scenario-specific">
-            <Select
-              selectedOption={selectedScenario}
-              onChange={({ detail }) => setSelectedScenario(detail.selectedOption)}
-              options={[
-                { label: 'None (Base Scenario - included in all scenarios)', value: null },
-                ...scenarios
-                  .filter(s => !s.isBaseline)
-                  .map(s => ({ label: s.name, value: s.id }))
-              ]}
-              placeholder="Select scenario..."
+          <FormField label="Assign to Scenarios" constraintText="Select one or more scenarios (leave empty for base scenario)">
+            <Multiselect
+              selectedOptions={selectedScenarios}
+              onChange={({ detail }) => setSelectedScenarios(detail.selectedOptions)}
+              options={scenarios
+                .filter(s => !s.isBaseline)
+                .map(s => ({ label: s.name, value: s.id }))
+              }
+              placeholder="Select scenarios..."
+              tokenLimit={3}
             />
           </FormField>
           <Box variant="p" color="text-body-secondary" fontSize="body-s">
-            <strong>Note:</strong> To exclude a base scenario rule from a specific scenario, keep it in "Base Scenario" and use the "Exclude from Scenario" action instead (coming soon).
+            <strong>Example:</strong> Assign "Sale Proceeds" to both "Sell Ellsworth" and "Worst Case" scenarios to include it in both.
           </Box>
         </SpaceBetween>
       </Modal>

@@ -15,6 +15,7 @@ import RecurringRules from './components/RecurringRules'
 import Export from './components/Export'
 import QuickAddModal from './components/QuickAddModal'
 import { supabase } from './lib/supabase'
+import { migrateDataIfNeeded } from './utils/dataMigration'
 
 const getBlankData = () => ({
   startingBalance: 0,
@@ -88,7 +89,22 @@ function App() {
         if (dataError && dataError.code !== 'PGRST116') { // PGRST116 = no rows
           console.error('Error loading financial data:', dataError)
         } else if (financialData) {
-          setData(financialData.data)
+          // Migrate data if needed
+          const migratedData = migrateDataIfNeeded(financialData.data)
+          setData(migratedData)
+          
+          // If migration occurred, save back to database
+          if (migratedData !== financialData.data) {
+            console.log('Data migrated, saving to database...')
+            await supabase
+              .from('financial_data')
+              .upsert({
+                user_id: user.id,
+                data: migratedData
+              }, {
+                onConflict: 'user_id'
+              })
+          }
         }
         
         // Load preferences
@@ -173,9 +189,8 @@ function App() {
       ...prev,
       recurringRules: [...prev.recurringRules, { 
         ...transaction, 
-        id: Date.now(),
-        scenarioId: quickAddScenarioId,
-        isDraft: quickAddScenarioId ? true : false
+        id: Date.now()
+        // scenarioIds is already set by QuickAddModal
       }]
     }))
     setShowQuickAdd(false)
@@ -234,11 +249,18 @@ function App() {
     setData(prev => ({
       ...prev,
       scenarios: prev.scenarios.filter(scenario => scenario.id !== scenarioId),
-      recurringRules: prev.recurringRules.map(rule => 
-        rule.scenarioId === scenarioId 
-          ? { ...rule, scenarioId: null, isDraft: false }
-          : rule
-      )
+      recurringRules: prev.recurringRules.map(rule => {
+        // Remove the deleted scenario from scenarioIds array
+        if (rule.scenarioIds && rule.scenarioIds.includes(scenarioId)) {
+          const updatedScenarioIds = rule.scenarioIds.filter(id => id !== scenarioId)
+          return { 
+            ...rule, 
+            scenarioIds: updatedScenarioIds,
+            isDraft: updatedScenarioIds.length > 0
+          }
+        }
+        return rule
+      })
     }))
   }
 

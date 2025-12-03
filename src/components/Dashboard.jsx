@@ -71,7 +71,10 @@ export default function Dashboard({
     // Calculate for base scenario (baseline)
     // Base Scenario = rules WITHOUT scenario assignment AND include = ON
     flows['base'] = calculateCashFlowTable(
-      (data.recurringRules || []).filter(rule => !rule.scenarioId && rule.include),
+      (data.recurringRules || []).filter(rule => {
+        const hasNoScenarios = !rule.scenarioIds || rule.scenarioIds.length === 0
+        return hasNoScenarios && rule.include
+      }),
       data.startingBalance || 0,
       data.startingBalanceDate || cashFlowStartDate,
       cashFlowStartDate,
@@ -85,11 +88,10 @@ export default function Dashboard({
     scenarios.forEach(scenario => {
       if (!scenario.isBaseline) {
         // Get base scenario rules (no scenario assignment, include = ON)
-        let baseRules = (data.recurringRules || []).filter(rule => 
-          !rule.scenarioId && 
-          rule.include &&
-          !rule.excludedFromScenarios?.includes(scenario.id)
-        )
+        let baseRules = (data.recurringRules || []).filter(rule => {
+          const hasNoScenarios = !rule.scenarioIds || rule.scenarioIds.length === 0
+          return hasNoScenarios && rule.include && !rule.excludedFromScenarios?.includes(scenario.id)
+        })
         
         // Apply overrides to base rules for this scenario
         if (data.ruleOverrides && data.ruleOverrides.length > 0) {
@@ -99,10 +101,10 @@ export default function Dashboard({
         }
         
         // Get scenario-specific rules (assigned to this scenario, include = ON)
-        const scenarioRules = (data.recurringRules || []).filter(rule => 
-          rule.scenarioId === scenario.id &&
-          rule.include
-        )
+        const scenarioRules = (data.recurringRules || []).filter(rule => {
+          const isInScenario = rule.scenarioIds && rule.scenarioIds.includes(scenario.id)
+          return isInScenario && rule.include
+        })
         
         // Combine both sets
         flows[scenario.id] = calculateCashFlowTable(

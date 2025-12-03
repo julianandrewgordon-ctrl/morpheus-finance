@@ -38,7 +38,38 @@ Allow users to model how changes in stock price affect their RSU income and over
 
 ---
 
-### 2. Critical Milestones & Financial Checkpoints
+### 2. Multi-Scenario Rule Assignment
+**Priority:** High  
+**Status:** Planned  
+**Estimated Effort:** 1 week
+
+**Description:**
+Allow rules to be assigned to multiple scenarios simultaneously instead of just one.
+
+**Use Case:**
+"Sale Proceeds" rule should appear in both "Sell Ellsworth" and "Worst Case" scenarios without duplication.
+
+**Current State:**
+- Rule has `scenarioId` (single scenario only)
+- Must duplicate rules to include in multiple scenarios
+
+**Proposed Solution:**
+- Change `scenarioId` to `scenarioIds` (array)
+- Update UI to use multi-select for scenario assignment
+- Add data migration to convert existing single assignments to arrays
+- Update calculation engine to handle array-based assignments
+
+**Technical Implementation:**
+- Data migration: `scenarioId` → `scenarioIds: [scenarioId]`
+- Update RecurringRules modal to use Multiselect component
+- Update Dashboard calculations to check if scenario is in array
+- Update all filters and queries
+
+**Breaking Change:** Requires data migration for existing users
+
+---
+
+### 3. Critical Milestones & Financial Checkpoints
 **Priority:** Medium  
 **Status:** Planned  
 **Estimated Effort:** 1-2 weeks
