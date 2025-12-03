@@ -15,6 +15,7 @@ import Select from '@cloudscape-design/components/select'
 import BalanceChart from './BalanceChart'
 import CashFlowTable from './CashFlowTable'
 import { calculateCashFlowTable, calculateSummary } from '../utils/cashFlowCalculator'
+import { applyOverridesToRule } from '../utils/ruleOverrides'
 
 export default function Dashboard({ 
   data, 
@@ -80,14 +81,22 @@ export default function Dashboard({
     
     // Calculate for each scenario
     // Scenario = Base Scenario rules + Scenario-specific rules (both with include = ON)
+    // Apply overrides to base rules for this scenario
     scenarios.forEach(scenario => {
       if (!scenario.isBaseline) {
         // Get base scenario rules (no scenario assignment, include = ON)
-        const baseRules = (data.recurringRules || []).filter(rule => 
+        let baseRules = (data.recurringRules || []).filter(rule => 
           !rule.scenarioId && 
           rule.include &&
           !rule.excludedFromScenarios?.includes(scenario.id)
         )
+        
+        // Apply overrides to base rules for this scenario
+        if (data.ruleOverrides && data.ruleOverrides.length > 0) {
+          baseRules = baseRules.map(rule => 
+            applyOverridesToRule(rule, data.ruleOverrides, scenario.id)
+          )
+        }
         
         // Get scenario-specific rules (assigned to this scenario, include = ON)
         const scenarioRules = (data.recurringRules || []).filter(rule => 

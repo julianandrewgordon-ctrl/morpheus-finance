@@ -311,6 +311,38 @@ function App() {
     setData(importedData)
   }
 
+  const handleAddOverride = (baseRuleId, scenarioId, overrideValues) => {
+    const newOverride = {
+      id: Date.now() + Math.random(),
+      baseRuleId,
+      scenarioId,
+      overrides: overrideValues,
+      createdAt: new Date().toISOString()
+    }
+    setData(prev => ({
+      ...prev,
+      ruleOverrides: [...(prev.ruleOverrides || []), newOverride]
+    }))
+  }
+
+  const handleUpdateOverride = (overrideId, newValues) => {
+    setData(prev => ({
+      ...prev,
+      ruleOverrides: (prev.ruleOverrides || []).map(override =>
+        override.id === overrideId
+          ? { ...override, overrides: newValues }
+          : override
+      )
+    }))
+  }
+
+  const handleRemoveOverride = (overrideId) => {
+    setData(prev => ({
+      ...prev,
+      ruleOverrides: (prev.ruleOverrides || []).filter(o => o.id !== overrideId)
+    }))
+  }
+
   const profileOptions = [
     { id: 'personal', text: '👤 Personal' },
     { id: 'business', text: '🏢 Business' },
@@ -342,6 +374,7 @@ function App() {
           <RecurringRules 
             rules={data.recurringRules}
             scenarios={data.scenarios}
+            ruleOverrides={data.ruleOverrides || []}
             onAddRule={(scenarioId) => {
               setQuickAddScenarioId(scenarioId)
               setShowQuickAdd(true)
@@ -350,6 +383,9 @@ function App() {
             onDeleteRule={handleDeleteRule}
             onToggleInclude={handleToggleInclude}
             onUpdateRule={handleUpdateRule}
+            onAddOverride={handleAddOverride}
+            onUpdateOverride={handleUpdateOverride}
+            onRemoveOverride={handleRemoveOverride}
           />
         )
       case '/export':

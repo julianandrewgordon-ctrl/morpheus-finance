@@ -19,7 +19,22 @@ import Toggle from '@cloudscape-design/components/toggle'
 import Container from '@cloudscape-design/components/container'
 import ColumnLayout from '@cloudscape-design/components/column-layout'
 
-export default function RecurringRules({ rules, scenarios, onAddRule, onBatchAdd, onDeleteRule, onToggleInclude, onUpdateRule }) {
+import OverrideModal from './OverrideModal'
+import { hasOverride, getOverride } from '../utils/ruleOverrides'
+
+export default function RecurringRules({ 
+  rules, 
+  scenarios, 
+  ruleOverrides,
+  onAddRule, 
+  onBatchAdd, 
+  onDeleteRule, 
+  onToggleInclude, 
+  onUpdateRule,
+  onAddOverride,
+  onUpdateOverride,
+  onRemoveOverride
+}) {
   const [filteringText, setFilteringText] = useState('')
   const [selectedType, setSelectedType] = useState({ label: 'All Types', value: 'all' })
   const [selectedAccount, setSelectedAccount] = useState({ label: 'All Accounts', value: 'all' })
@@ -27,11 +42,13 @@ export default function RecurringRules({ rules, scenarios, onAddRule, onBatchAdd
   const [showBatchModal, setShowBatchModal] = useState(false)
   const [showEditModal, setShowEditModal] = useState(false)
   const [showScenarioModal, setShowScenarioModal] = useState(false)
+  const [showOverrideModal, setShowOverrideModal] = useState(false)
   const [batchText, setBatchText] = useState('')
   const [flashMessages, setFlashMessages] = useState([])
   const [editingRule, setEditingRule] = useState(null)
   const [editingRuleForScenario, setEditingRuleForScenario] = useState(null)
   const [selectedScenario, setSelectedScenario] = useState(null)
+  const [overrideRule, setOverrideRule] = useState(null)
   
   // Edit form state
   const [editForm, setEditForm] = useState({
@@ -345,22 +362,32 @@ export default function RecurringRules({ rules, scenarios, onAddRule, onBatchAdd
     {
       id: 'name',
       header: 'Name',
-      cell: item => (
-        <div style={{ maxWidth: '250px', overflow: 'visible' }}>
-          <SpaceBetween size="xxs">
-            <Box style={{ wordWrap: 'break-word', whiteSpace: 'normal' }}>
-              <span style={{ wordBreak: 'break-word' }}>{item.name}</span>{' '}
-              {!item.scenarioId && <Badge color="green">Base</Badge>}
-              {item.scenarioId && (
-                <Badge color="blue">
-                  {scenarios.find(s => s.id === item.scenarioId)?.name || 'Scenario'}
-                </Badge>
-              )}
-              {item.paymentSchedule && item.paymentSchedule.length > 0 && (
-                <Badge color="grey">
-                  {item.paymentSchedule.length} Phases
-                </Badge>
-              )}
+      cell: item => {
+        const isOverridden = !item.scenarioId && viewingScenario.value !== 'base' && hasOverride(ruleOverrides, item.id, viewingScenario.value)
+        
+        return (
+          <div style={{ 
+            maxWidth: '250px', 
+            overflow: 'visible',
+            backgroundColor: isOverridden ? '#e3f2fd' : 'transparent',
+            padding: isOverridden ? '4px' : '0',
+            borderRadius: isOverridden ? '4px' : '0'
+          }}>
+            <SpaceBetween size="xxs">
+              <Box style={{ wordWrap: 'break-word', whiteSpace: 'normal' }}>
+                <span style={{ wordBreak: 'break-word' }}>{item.name}</span>{' '}
+                {!item.scenarioId && <Badge color="green">Base</Badge>}
+                {item.scenarioId && (
+                  <Badge color="blue">
+                    {scenarios.find(s => s.id === item.scenarioId)?.name || 'Scenario'}
+                  </Badge>
+                )}
+                {isOverridden && <Badge color="blue">Modified</Badge>}
+                {item.paymentSchedule && item.paymentSchedule.length > 0 && (
+                  <Badge color="grey">
+                    {item.paymentSchedule.length} Phases
+                  </Badge>
+                )}
             </Box>
             {item.description && (
               <Box 
@@ -379,7 +406,8 @@ export default function RecurringRules({ rules, scenarios, onAddRule, onBatchAdd
             )}
           </SpaceBetween>
         </div>
-      ),
+        )
+      },
       width: 250
     },
     {
@@ -454,42 +482,64 @@ export default function RecurringRules({ rules, scenarios, onAddRule, onBatchAdd
     {
       id: 'actions',
       header: 'Actions',
-      cell: item => (
-        <ButtonDropdown
-          items={[
-            { text: 'Edit Rule', id: 'edit', iconName: 'edit' },
-            { text: 'Assign to Scenario', id: 'scenario', iconName: 'share' },
-            { id: 'divider-1', itemType: 'divider' },
-            { text: 'Delete', id: 'delete', iconName: 'remove' }
-          ]}
-          onItemClick={({ detail }) => {
-            if (detail.id === 'delete') {
-              onDeleteRule(item.id)
-              setFlashMessages([{
-                type: 'success',
-                content: `Deleted rule: ${item.name}`,
-                dismissible: true,
-                onDismiss: () => setFlashMessages([])
-              }])
-            } else if (detail.id === 'edit') {
-              handleEditRule(item)
-            } else if (detail.id === 'scenario') {
-              const currentScenario = item.scenarioId 
-                ? scenarios.find(s => s.id === item.scenarioId)
-                : null
-              setEditingRuleForScenario(item)
-              setSelectedScenario(currentScenario 
-                ? { label: currentScenario.name, value: currentScenario.id }
-                : null
-              )
-              setShowScenarioModal(true)
-            }
-          }}
-          variant="icon"
-          ariaLabel="Actions"
-          expandToViewport
-        />
-      ),
+      cell: item => {
+        const isBaseRule = !item.scenarioId
+        const isViewingScenario = viewingScenario.value !== 'base'
+        const canOverride = isBaseRule && isViewingScenario
+        const hasOverrideForScenario = canOverride && hasOverride(ruleOverrides, item.id, viewingScenario.value)
+        
+        const actionItems = [
+          { text: 'Edit Rule', id: 'edit', iconName: 'edit' },
+          { text: 'Assign to Scenario', id: 'scenario', iconName: 'share' }
+        ]
+        
+        if (canOverride) {
+          actionItems.push({ id: 'divider-override', itemType: 'divider' })
+          actionItems.push({ 
+            text: hasOverrideForScenario ? 'Edit Override' : 'Override Rule', 
+            id: 'override', 
+            iconName: 'edit' 
+          })
+        }
+        
+        actionItems.push({ id: 'divider-1', itemType: 'divider' })
+        actionItems.push({ text: 'Delete', id: 'delete', iconName: 'remove' })
+        
+        return (
+          <ButtonDropdown
+            items={actionItems}
+            onItemClick={({ detail }) => {
+              if (detail.id === 'delete') {
+                onDeleteRule(item.id)
+                setFlashMessages([{
+                  type: 'success',
+                  content: `Deleted rule: ${item.name}`,
+                  dismissible: true,
+                  onDismiss: () => setFlashMessages([])
+                }])
+              } else if (detail.id === 'edit') {
+                handleEditRule(item)
+              } else if (detail.id === 'scenario') {
+                const currentScenario = item.scenarioId 
+                  ? scenarios.find(s => s.id === item.scenarioId)
+                  : null
+                setEditingRuleForScenario(item)
+                setSelectedScenario(currentScenario 
+                  ? { label: currentScenario.name, value: currentScenario.id }
+                  : null
+                )
+                setShowScenarioModal(true)
+              } else if (detail.id === 'override') {
+                setOverrideRule(item)
+                setShowOverrideModal(true)
+              }
+            }}
+            variant="icon"
+            ariaLabel="Actions"
+            expandToViewport
+          />
+        )
+      },
       width: 80
     }
   ]
@@ -913,6 +963,50 @@ export default function RecurringRules({ rules, scenarios, onAddRule, onBatchAdd
           />
         </SpaceBetween>
       </Modal>
+
+      {/* Override Modal */}
+      <OverrideModal
+        visible={showOverrideModal}
+        onDismiss={() => {
+          setShowOverrideModal(false)
+          setOverrideRule(null)
+        }}
+        rule={overrideRule}
+        scenario={scenarios.find(s => s.id === viewingScenario.value)}
+        existingOverride={overrideRule ? getOverride(ruleOverrides, overrideRule.id, viewingScenario.value) : null}
+        onSave={(overrideValues) => {
+          const existing = getOverride(ruleOverrides, overrideRule.id, viewingScenario.value)
+          if (existing) {
+            onUpdateOverride(existing.id, overrideValues)
+            setFlashMessages([{
+              type: 'success',
+              content: `Updated override for: ${overrideRule.name}`,
+              dismissible: true,
+              onDismiss: () => setFlashMessages([])
+            }])
+          } else {
+            onAddOverride(overrideRule.id, viewingScenario.value, overrideValues)
+            setFlashMessages([{
+              type: 'success',
+              content: `Created override for: ${overrideRule.name}`,
+              dismissible: true,
+              onDismiss: () => setFlashMessages([])
+            }])
+          }
+        }}
+        onRemove={() => {
+          const existing = getOverride(ruleOverrides, overrideRule.id, viewingScenario.value)
+          if (existing) {
+            onRemoveOverride(existing.id)
+            setFlashMessages([{
+              type: 'success',
+              content: `Removed override for: ${overrideRule.name}`,
+              dismissible: true,
+              onDismiss: () => setFlashMessages([])
+            }])
+          }
+        }}
+      />
     </>
   )
 }
