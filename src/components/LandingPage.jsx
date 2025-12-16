@@ -20,6 +20,7 @@ export default function LandingPage({ onEnter }) {
   const [success, setSuccess] = useState('')
   const [isLoading, setIsLoading] = useState(false)
   const [activeTab, setActiveTab] = useState('signin')
+  const [showResetForm, setShowResetForm] = useState(false)
 
   const handleSignIn = async () => {
     setError('')
@@ -65,6 +66,33 @@ export default function LandingPage({ onEnter }) {
       }
     } catch (error) {
       setError(error.message || 'Failed to create account')
+      setIsLoading(false)
+    }
+  }
+
+  const handlePasswordReset = async () => {
+    setError('')
+    setSuccess('')
+    
+    if (!email.trim()) {
+      setError('Please enter your email address')
+      return
+    }
+    
+    setIsLoading(true)
+    
+    try {
+      const { error } = await supabase.auth.resetPasswordForEmail(email.trim(), {
+        redirectTo: window.location.origin
+      })
+      
+      if (error) throw error
+      
+      setSuccess('Password reset email sent! Check your inbox.')
+      setShowResetForm(false)
+    } catch (error) {
+      setError(error.message || 'Failed to send reset email')
+    } finally {
       setIsLoading(false)
     }
   }
@@ -201,7 +229,49 @@ export default function LandingPage({ onEnter }) {
                         {
                           id: 'signin',
                           label: 'Sign In',
-                          content: (
+                          content: showResetForm ? (
+                            <SpaceBetween size="m">
+                              <Box variant="p">
+                                <span style={{ color: '#b19cd9' }}>
+                                  Enter your email address and we'll send you a link to reset your password.
+                                </span>
+                              </Box>
+                              
+                              <FormField label={<span style={{ color: '#e0d0ff' }}>Email</span>}>
+                                <Input
+                                  value={email}
+                                  onChange={({ detail }) => setEmail(detail.value)}
+                                  placeholder="your@email.com"
+                                  type="email"
+                                  onKeyPress={(e) => e.key === 'Enter' && handlePasswordReset()}
+                                  disabled={isLoading}
+                                />
+                              </FormField>
+
+                              <div style={{ textAlign: 'center' }}>
+                                <SpaceBetween size="s">
+                                  <Button
+                                    variant="primary"
+                                    onClick={handlePasswordReset}
+                                    loading={isLoading}
+                                    fullWidth
+                                  >
+                                    Send Reset Link
+                                  </Button>
+                                  <Button
+                                    variant="link"
+                                    onClick={() => {
+                                      setShowResetForm(false)
+                                      setError('')
+                                    }}
+                                    disabled={isLoading}
+                                  >
+                                    Back to Sign In
+                                  </Button>
+                                </SpaceBetween>
+                              </div>
+                            </SpaceBetween>
+                          ) : (
                             <SpaceBetween size="m">
                               <FormField label={<span style={{ color: '#e0d0ff' }}>Email</span>}>
                                 <Input
@@ -226,16 +296,28 @@ export default function LandingPage({ onEnter }) {
                               </FormField>
 
                               <div style={{ textAlign: 'center' }}>
-                                <Button
-                                  variant="primary"
-                                  onClick={handleSignIn}
-                                  iconAlign="right"
-                                  iconName="angle-right"
-                                  loading={isLoading}
-                                  fullWidth
-                                >
-                                  Sign In
-                                </Button>
+                                <SpaceBetween size="s">
+                                  <Button
+                                    variant="primary"
+                                    onClick={handleSignIn}
+                                    iconAlign="right"
+                                    iconName="angle-right"
+                                    loading={isLoading}
+                                    fullWidth
+                                  >
+                                    Sign In
+                                  </Button>
+                                  <Button
+                                    variant="link"
+                                    onClick={() => {
+                                      setShowResetForm(true)
+                                      setError('')
+                                      setSuccess('')
+                                    }}
+                                  >
+                                    Forgot Password?
+                                  </Button>
+                                </SpaceBetween>
                               </div>
                             </SpaceBetween>
                           )
