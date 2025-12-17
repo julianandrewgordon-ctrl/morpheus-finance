@@ -1,12 +1,13 @@
 import { useState, useEffect } from 'react'
-import { AppShell, Burger, Group, Text, NavLink, Menu, Button, Modal, Stack, TextInput, Alert, Loader, Center, Box } from '@mantine/core'
+import { AppShell, Burger, Group, Text, NavLink, Menu, Button, Modal, Stack, TextInput, Alert, Loader, Center, Box, Select } from '@mantine/core'
 import { useDisclosure } from '@mantine/hooks'
 import LandingPage from './components/LandingPage'
 import Dashboard from './components/Dashboard'
 import RecurringRules from './components/RecurringRules'
 import Export from './components/Export'
 import QuickAddModal from './components/QuickAddModal'
-import { supabase } from './lib/supabase'
+import HouseholdSettings from './components/HouseholdSettings'
+import { supabase, getUserHouseholds, createHousehold, getFinancialDataByHousehold, saveFinancialDataByHousehold } from './lib/supabase'
 import { migrateDataIfNeeded } from './utils/dataMigration'
 
 const getBlankData = () => ({
@@ -24,7 +25,8 @@ function App() {
   const [user, setUser] = useState(null)
   const [loading, setLoading] = useState(true)
   const [activeHref, setActiveHref] = useState('/dashboard')
-  const [currentProfile, setCurrentProfile] = useState({ label: 'Personal', value: 'personal' })
+  const [households, setHouseholds] = useState([])
+  const [currentHouseholdId, setCurrentHouseholdId] = useState(null)
   const [showQuickAdd, setShowQuickAdd] = useState(false)
   const [quickAddScenarioId, setQuickAddScenarioId] = useState(null)
   const [showResetModal, setShowResetModal] = useState(false)
@@ -33,6 +35,7 @@ function App() {
   const [opened, { toggle }] = useDisclosure()
   const [cashFlowStartDate, setCashFlowStartDate] = useState('2025-11-20')
   const [hideEmptyRows, setHideEmptyRows] = useState(false)
+  const [householdLoading, setHouseholdLoading] = useState(false)
   
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
@@ -66,30 +69,23 @@ function App() {
   useEffect(() => {
     if (!user) return
     
-    const loadData = async () => {
+    const loadHouseholds = async () => {
       try {
-        const { data: financialData, error: dataError } = await supabase
-          .from('financial_data')
-          .select('data')
-          .eq('user_id', user.id)
-          .single()
+        const householdData = await getUserHouseholds()
         
-        if (dataError && dataError.code !== 'PGRST116') {
-          console.error('Error loading financial data:', dataError)
-        } else if (financialData) {
-          const migratedData = migrateDataIfNeeded(financialData.data)
-          setData(migratedData)
-          
-          if (migratedData !== financialData.data) {
-            console.log('Data migrated, saving to database...')
-            await supabase
-              .from('financial_data')
-              .upsert({
-                user_id: user.id,
-                data: migratedData
-              }, {
-                onConflict: 'user_id'
-              })
+        if (householdData && householdData.length > 0) {
+          setHouseholds(householdData)
+          const savedHouseholdId = localStorage.getItem(`morpheus_household_${user.id}`)
+          const validHousehold = householdData.find(h => h.id === savedHouseholdId)
+          setCurrentHouseholdId(validHousehold?.id || householdData[0].id)
+        } else {
+          try {
+            const newHousehold = await createHousehold(`${user.email?.split('@')[0] || 'My'}'s Household`)
+            setHouseholds([newHousehold])
+            setCurrentHouseholdId(newHousehold.id)
+          } catch (createError) {
+            console.warn('Household tables not set up yet, using legacy mode:', createError.message)
+            setCurrentHouseholdId('legacy')
           }
         }
         
@@ -106,38 +102,88 @@ function App() {
           if (prefs.hide_empty_rows !== null) setHideEmptyRows(prefs.hide_empty_rows)
         }
       } catch (error) {
-        console.error('Error in loadData:', error)
+        console.warn('Household tables not available, using legacy mode:', error.message)
+        setCurrentHouseholdId('legacy')
       }
     }
     
-    loadData()
+    loadHouseholds()
   }, [user])
+
+  useEffect(() => {
+    if (!user || !currentHouseholdId) return
+    
+    const loadHouseholdData = async () => {
+      setHouseholdLoading(true)
+      try {
+        if (currentHouseholdId === 'legacy') {
+          const { data: financialData, error: dataError } = await supabase
+            .from('financial_data')
+            .select('data')
+            .eq('user_id', user.id)
+            .single()
+          
+          if (dataError && dataError.code !== 'PGRST116') {
+            console.error('Error loading financial data:', dataError)
+          } else if (financialData) {
+            const migratedData = migrateDataIfNeeded(financialData.data)
+            setData(migratedData)
+          } else {
+            setData(getBlankData())
+          }
+        } else {
+          localStorage.setItem(`morpheus_household_${user.id}`, currentHouseholdId)
+          
+          const financialData = await getFinancialDataByHousehold(currentHouseholdId)
+          
+          if (financialData) {
+            const migratedData = migrateDataIfNeeded(financialData.data)
+            setData(migratedData)
+            
+            if (migratedData !== financialData.data) {
+              console.log('Data migrated, saving to database...')
+              await saveFinancialDataByHousehold(currentHouseholdId, migratedData)
+            }
+          } else {
+            setData(getBlankData())
+          }
+        }
+      } catch (error) {
+        console.error('Error loading household data:', error)
+        setData(getBlankData())
+      } finally {
+        setHouseholdLoading(false)
+      }
+    }
+    
+    loadHouseholdData()
+  }, [user, currentHouseholdId])
   
   useEffect(() => {
-    if (!user) return
+    if (!user || !currentHouseholdId || householdLoading) return
     
     const saveData = async () => {
       try {
-        const { error } = await supabase
-          .from('financial_data')
-          .upsert({
-            user_id: user.id,
-            data: data
-          }, {
-            onConflict: 'user_id'
-          })
-        
-        if (error) {
-          console.error('Error saving data:', error)
+        if (currentHouseholdId === 'legacy') {
+          await supabase
+            .from('financial_data')
+            .upsert({
+              user_id: user.id,
+              data: data
+            }, {
+              onConflict: 'user_id'
+            })
+        } else {
+          await saveFinancialDataByHousehold(currentHouseholdId, data)
         }
       } catch (error) {
-        console.error('Error in saveData:', error)
+        console.error('Error saving data:', error)
       }
     }
     
     const timeoutId = setTimeout(saveData, 1000)
     return () => clearTimeout(timeoutId)
-  }, [data, user])
+  }, [data, user, currentHouseholdId, householdLoading])
   
   useEffect(() => {
     if (!user) return
@@ -343,13 +389,27 @@ function App() {
     }))
   }
 
-  const profileOptions = [
-    { id: 'personal', label: 'Personal' },
-    { id: 'business', label: 'Business' },
-    { id: 'rental', label: 'Rental Property' }
-  ]
+  const currentHousehold = households.find(h => h.id === currentHouseholdId)
+
+  const handleHouseholdChange = async (newHouseholdId) => {
+    setCurrentHouseholdId(newHouseholdId)
+    try {
+      const updatedHouseholds = await getUserHouseholds()
+      setHouseholds(updatedHouseholds || [])
+    } catch (error) {
+      console.error('Error refreshing households:', error)
+    }
+  }
 
   const getContent = () => {
+    if (householdLoading) {
+      return (
+        <Center style={{ minHeight: 400 }}>
+          <Loader color="violet" size="lg" />
+        </Center>
+      )
+    }
+
     switch (activeHref) {
       case '/dashboard':
         return (
@@ -390,6 +450,15 @@ function App() {
         )
       case '/export':
         return <Export data={data} onImportData={handleImportData} />
+      case '/household':
+        return (
+          <HouseholdSettings
+            currentHouseholdId={currentHouseholdId}
+            onHouseholdChange={handleHouseholdChange}
+            userId={user?.id}
+            userEmail={user?.email}
+          />
+        )
       default:
         return (
           <Dashboard 
@@ -437,22 +506,24 @@ function App() {
           <Group h="100%" px="md" justify="space-between">
             <Group>
               <Burger opened={opened} onClick={toggle} hiddenFrom="sm" size="sm" />
-              <Text size="lg" fw={700} c="violet">Morpheus - Financial Planning</Text>
-              <Text size="sm" c="dimmed">({user.email})</Text>
+              <Text size="lg" fw={700} c="violet">Morpheus</Text>
+              {households.length > 1 ? (
+                <Select
+                  size="xs"
+                  value={currentHouseholdId}
+                  onChange={handleHouseholdChange}
+                  data={households.map(h => ({
+                    value: h.id,
+                    label: h.name
+                  }))}
+                  style={{ width: 180 }}
+                />
+              ) : currentHousehold ? (
+                <Text size="sm" c="dimmed">{currentHousehold.name}</Text>
+              ) : null}
             </Group>
             <Group>
-              <Menu shadow="md" width={200}>
-                <Menu.Target>
-                  <Button variant="subtle">{currentProfile.label}</Button>
-                </Menu.Target>
-                <Menu.Dropdown>
-                  {profileOptions.map(p => (
-                    <Menu.Item key={p.id} onClick={() => setCurrentProfile(p)}>
-                      {p.label}
-                    </Menu.Item>
-                  ))}
-                </Menu.Dropdown>
-              </Menu>
+              <Text size="sm" c="dimmed">{user.email}</Text>
               <Button variant="subtle" color="red" onClick={handleLogout}>
                 Logout
               </Button>
@@ -481,10 +552,11 @@ function App() {
           />
           <Box mt="xl">
             <NavLink
-              label="Settings"
-              disabled
-              leftSection={<span>⚙️</span>}
-              description="Coming soon"
+              label="Household & Sharing"
+              active={activeHref === '/household'}
+              onClick={() => setActiveHref('/household')}
+              leftSection={<span>👥</span>}
+              description="Invite members, manage access"
             />
           </Box>
         </AppShell.Navbar>
