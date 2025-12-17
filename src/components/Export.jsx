@@ -1,17 +1,14 @@
 import { useState } from 'react'
-import Container from '@cloudscape-design/components/container'
-import Header from '@cloudscape-design/components/header'
-import SpaceBetween from '@cloudscape-design/components/space-between'
-import Box from '@cloudscape-design/components/box'
-import Button from '@cloudscape-design/components/button'
-import Textarea from '@cloudscape-design/components/textarea'
-import Alert from '@cloudscape-design/components/alert'
-import Flashbar from '@cloudscape-design/components/flashbar'
-import ColumnLayout from '@cloudscape-design/components/column-layout'
+import { Paper, Title, Text, Group, Button, Stack, SimpleGrid, Textarea, Alert, Notification, Box } from '@mantine/core'
 
 export default function Export({ data, onImportData }) {
   const [importText, setImportText] = useState('')
-  const [flashMessages, setFlashMessages] = useState([])
+  const [notification, setNotification] = useState(null)
+
+  const showNotification = (type, message) => {
+    setNotification({ type, message })
+    setTimeout(() => setNotification(null), 3000)
+  }
 
   const handleExport = () => {
     const dataStr = JSON.stringify(data, null, 2)
@@ -23,52 +20,29 @@ export default function Export({ data, onImportData }) {
     link.click()
     URL.revokeObjectURL(url)
     
-    setFlashMessages([{
-      type: 'success',
-      content: 'Data exported successfully!',
-      dismissible: true,
-      onDismiss: () => setFlashMessages([])
-    }])
+    showNotification('success', 'Data exported successfully!')
   }
 
   const handleCopyToClipboard = () => {
     const dataStr = JSON.stringify(data, null, 2)
     navigator.clipboard.writeText(dataStr)
-    setFlashMessages([{
-      type: 'success',
-      content: 'Data copied to clipboard!',
-      dismissible: true,
-      onDismiss: () => setFlashMessages([])
-    }])
+    showNotification('success', 'Data copied to clipboard!')
   }
 
   const handleImport = () => {
     try {
       const importedData = JSON.parse(importText)
       
-      // Validate the data structure
       if (!importedData.recurringRules || !importedData.scenarios) {
         throw new Error('Invalid data format')
       }
       
-      // Call the import handler which will save to localStorage and update state
       onImportData(importedData)
       
-      setFlashMessages([{
-        type: 'success',
-        content: 'Data imported successfully!',
-        dismissible: true,
-        onDismiss: () => setFlashMessages([])
-      }])
-      
+      showNotification('success', 'Data imported successfully!')
       setImportText('')
     } catch (error) {
-      setFlashMessages([{
-        type: 'error',
-        content: `Import failed: ${error.message}. Please check your data format.`,
-        dismissible: true,
-        onDismiss: () => setFlashMessages([])
-      }])
+      showNotification('error', `Import failed: ${error.message}. Please check your data format.`)
     }
   }
 
@@ -81,65 +55,57 @@ export default function Export({ data, onImportData }) {
 
   return (
     <>
-      <Flashbar items={flashMessages} />
-      <SpaceBetween size="l">
-        <Header variant="h1">Export & Import Data</Header>
-        
-        {/* Current Data Summary */}
-        <Container
-          header={
-            <Header variant="h2">
-              Current Data Summary
-            </Header>
-          }
+      {notification && (
+        <Notification 
+          color={notification.type === 'success' ? 'green' : 'red'}
+          onClose={() => setNotification(null)}
+          style={{ position: 'fixed', top: 20, right: 20, zIndex: 1000 }}
         >
-          <ColumnLayout columns={4} variant="text-grid">
-            <div>
-              <Box variant="awsui-key-label">Recurring Rules</Box>
-              <Box variant="h1" fontSize="display-l">{dataStats.rules}</Box>
-            </div>
-            <div>
-              <Box variant="awsui-key-label">Scenarios</Box>
-              <Box variant="h1" fontSize="display-l">{dataStats.scenarios}</Box>
-            </div>
-            <div>
-              <Box variant="awsui-key-label">Historical Entries</Box>
-              <Box variant="h1" fontSize="display-l">{dataStats.historicalEntries}</Box>
-            </div>
-            <div>
-              <Box variant="awsui-key-label">Starting Balance</Box>
-              <Box variant="h1" fontSize="display-l">${dataStats.startingBalance.toLocaleString()}</Box>
-            </div>
-          </ColumnLayout>
-        </Container>
+          {notification.message}
+        </Notification>
+      )}
 
-        {/* Export Section */}
-        <Container
-          header={
-            <Header
-              variant="h2"
-              description="Download your financial data as a backup file"
-            >
-              Export Data
-            </Header>
-          }
-        >
-          <SpaceBetween size="m">
-            <Alert type="info">
+      <Stack gap="lg">
+        <Title order={1}>Export & Import Data</Title>
+        
+        <Paper p="md" withBorder>
+          <Title order={3} mb="md">Current Data Summary</Title>
+          <SimpleGrid cols={{ base: 2, sm: 4 }}>
+            <Box>
+              <Text size="sm" c="dimmed">Recurring Rules</Text>
+              <Title order={2}>{dataStats.rules}</Title>
+            </Box>
+            <Box>
+              <Text size="sm" c="dimmed">Scenarios</Text>
+              <Title order={2}>{dataStats.scenarios}</Title>
+            </Box>
+            <Box>
+              <Text size="sm" c="dimmed">Historical Entries</Text>
+              <Title order={2}>{dataStats.historicalEntries}</Title>
+            </Box>
+            <Box>
+              <Text size="sm" c="dimmed">Starting Balance</Text>
+              <Title order={2}>${dataStats.startingBalance.toLocaleString()}</Title>
+            </Box>
+          </SimpleGrid>
+        </Paper>
+
+        <Paper p="md" withBorder>
+          <Title order={3} mb="xs">Export Data</Title>
+          <Text size="sm" c="dimmed" mb="md">Download your financial data as a backup file</Text>
+          
+          <Stack gap="md">
+            <Alert color="blue">
               Export creates a JSON file containing all your rules, scenarios, balances, and settings. 
               Keep this file safe as a backup or to transfer data between devices.
             </Alert>
             
-            <SpaceBetween direction="horizontal" size="xs">
-              <Button variant="primary" iconName="download" onClick={handleExport}>
-                Download Backup File
-              </Button>
-              <Button iconName="copy" onClick={handleCopyToClipboard}>
-                Copy to Clipboard
-              </Button>
-            </SpaceBetween>
+            <Group>
+              <Button onClick={handleExport}>Download Backup File</Button>
+              <Button variant="light" onClick={handleCopyToClipboard}>Copy to Clipboard</Button>
+            </Group>
 
-            <Box variant="p" color="text-body-secondary">
+            <Text size="sm" c="dimmed">
               <strong>What's included:</strong>
               <ul>
                 <li>All recurring rules and payment schedules</li>
@@ -148,49 +114,38 @@ export default function Export({ data, onImportData }) {
                 <li>Historical cash flow entries</li>
                 <li>User preferences</li>
               </ul>
-            </Box>
-          </SpaceBetween>
-        </Container>
+            </Text>
+          </Stack>
+        </Paper>
 
-        {/* Import Section */}
-        <Container
-          header={
-            <Header
-              variant="h2"
-              description="Restore data from a backup file"
-            >
-              Import Data
-            </Header>
-          }
-        >
-          <SpaceBetween size="m">
-            <Alert type="warning">
+        <Paper p="md" withBorder>
+          <Title order={3} mb="xs">Import Data</Title>
+          <Text size="sm" c="dimmed" mb="md">Restore data from a backup file</Text>
+          
+          <Stack gap="md">
+            <Alert color="yellow">
               <strong>Warning:</strong> Importing will replace ALL your current data. 
               Make sure to export your current data first if you want to keep it.
             </Alert>
 
-            <SpaceBetween size="s">
-              <Box variant="p">
-                Paste the contents of your backup JSON file below:
-              </Box>
+            <Stack gap="xs">
+              <Text>Paste the contents of your backup JSON file below:</Text>
               <Textarea
                 value={importText}
-                onChange={({ detail }) => setImportText(detail.value)}
-                placeholder='Paste your exported JSON data here...'
-                rows={10}
+                onChange={(e) => setImportText(e.target.value)}
+                placeholder="Paste your exported JSON data here..."
+                minRows={10}
               />
-            </SpaceBetween>
+            </Stack>
 
             <Button 
-              variant="primary" 
-              iconName="upload"
               onClick={handleImport}
               disabled={!importText.trim()}
             >
               Import Data
             </Button>
 
-            <Box variant="p" color="text-body-secondary" fontSize="body-s">
+            <Text size="xs" c="dimmed">
               <strong>How to import:</strong>
               <ol>
                 <li>Open your backup JSON file in a text editor</li>
@@ -198,34 +153,20 @@ export default function Export({ data, onImportData }) {
                 <li>Paste into the text area above</li>
                 <li>Click "Import Data"</li>
               </ol>
-            </Box>
-          </SpaceBetween>
-        </Container>
+            </Text>
+          </Stack>
+        </Paper>
 
-        {/* Best Practices */}
-        <Container
-          header={
-            <Header variant="h2">
-              Backup Best Practices
-            </Header>
-          }
-        >
-          <SpaceBetween size="s">
-            <Box variant="p">
-              💾 <strong>Regular Backups:</strong> Export your data weekly or after making significant changes
-            </Box>
-            <Box variant="p">
-              📁 <strong>Multiple Copies:</strong> Keep backups in different locations (cloud storage, external drive)
-            </Box>
-            <Box variant="p">
-              📅 <strong>Date Your Files:</strong> The export automatically includes the date in the filename
-            </Box>
-            <Box variant="p">
-              🔒 <strong>Secure Storage:</strong> Your financial data is sensitive - store backups securely
-            </Box>
-          </SpaceBetween>
-        </Container>
-      </SpaceBetween>
+        <Paper p="md" withBorder>
+          <Title order={3} mb="md">Backup Best Practices</Title>
+          <Stack gap="xs">
+            <Text>💾 <strong>Regular Backups:</strong> Export your data weekly or after making significant changes</Text>
+            <Text>📁 <strong>Multiple Copies:</strong> Keep backups in different locations (cloud storage, external drive)</Text>
+            <Text>📅 <strong>Date Your Files:</strong> The export automatically includes the date in the filename</Text>
+            <Text>🔒 <strong>Secure Storage:</strong> Your financial data is sensitive - store backups securely</Text>
+          </Stack>
+        </Paper>
+      </Stack>
     </>
   )
 }

@@ -1,13 +1,5 @@
 import { useState, useEffect } from 'react'
-import Modal from '@cloudscape-design/components/modal'
-import Box from '@cloudscape-design/components/box'
-import SpaceBetween from '@cloudscape-design/components/space-between'
-import Button from '@cloudscape-design/components/button'
-import FormField from '@cloudscape-design/components/form-field'
-import Input from '@cloudscape-design/components/input'
-import Select from '@cloudscape-design/components/select'
-import DatePicker from '@cloudscape-design/components/date-picker'
-import Alert from '@cloudscape-design/components/alert'
+import { Modal, Stack, TextInput, Select, Button, Alert, Text, Group } from '@mantine/core'
 
 export default function OverrideModal({ 
   visible, 
@@ -24,26 +16,24 @@ export default function OverrideModal({
   const [frequency, setFrequency] = useState(null)
 
   const frequencyOptions = [
-    { label: 'One-time', value: 'One-time' },
-    { label: 'Weekly', value: 'Weekly' },
-    { label: 'Bi-weekly', value: 'Bi-weekly' },
-    { label: 'Monthly', value: 'Monthly' }
+    { value: 'One-time', label: 'One-time' },
+    { value: 'Weekly', label: 'Weekly' },
+    { value: 'Bi-weekly', label: 'Bi-weekly' },
+    { value: 'Monthly', label: 'Monthly' }
   ]
 
   useEffect(() => {
     if (visible && rule) {
       if (existingOverride) {
-        // Load override values
         setAmount(existingOverride.overrides.amount?.toString() || rule.amount?.toString() || '')
         setEffectiveDate(existingOverride.overrides.effectiveDate || rule.effectiveDate || '')
         setEndDate(existingOverride.overrides.endDate || rule.endDate || '')
-        setFrequency(frequencyOptions.find(f => f.value === (existingOverride.overrides.frequency || rule.frequency)) || null)
+        setFrequency(existingOverride.overrides.frequency || rule.frequency || null)
       } else {
-        // Load base rule values
         setAmount(rule.amount?.toString() || '')
         setEffectiveDate(rule.effectiveDate || '')
         setEndDate(rule.endDate || '')
-        setFrequency(frequencyOptions.find(f => f.value === rule.frequency) || null)
+        setFrequency(rule.frequency || null)
       }
     }
   }, [visible, rule, existingOverride])
@@ -51,7 +41,6 @@ export default function OverrideModal({
   const handleSave = () => {
     const overrideValues = {}
     
-    // Only include changed values
     if (amount !== rule.amount?.toString()) {
       overrideValues.amount = parseFloat(amount)
     }
@@ -61,8 +50,8 @@ export default function OverrideModal({
     if (endDate !== rule.endDate) {
       overrideValues.endDate = endDate
     }
-    if (frequency?.value !== rule.frequency) {
-      overrideValues.frequency = frequency?.value
+    if (frequency !== rule.frequency) {
+      overrideValues.frequency = frequency
     }
 
     onSave(overrideValues)
@@ -78,84 +67,73 @@ export default function OverrideModal({
 
   return (
     <Modal
-      visible={visible}
-      onDismiss={onDismiss}
-      header={existingOverride ? `Edit Override: ${rule.name}` : `Override Rule: ${rule.name}`}
-      footer={
-        <Box float="right">
-          <SpaceBetween direction="horizontal" size="xs">
-            <Button variant="link" onClick={onDismiss}>
-              Cancel
-            </Button>
-            {existingOverride && (
-              <Button onClick={handleRemove}>
-                Remove Override
-              </Button>
-            )}
-            <Button variant="primary" onClick={handleSave}>
-              {existingOverride ? 'Update Override' : 'Create Override'}
-            </Button>
-          </SpaceBetween>
-        </Box>
-      }
+      opened={visible}
+      onClose={onDismiss}
+      title={existingOverride ? `Edit Override: ${rule.name}` : `Override Rule: ${rule.name}`}
     >
-      <SpaceBetween size="m">
-        <Alert type="info">
+      <Stack gap="md">
+        <Alert color="blue">
           Creating an override will change this rule's values only in the "{scenario?.name}" scenario. 
           The base scenario and other scenarios will not be affected.
         </Alert>
 
-        <Box variant="h3">Original Values</Box>
-        <Box variant="p" color="text-body-secondary">
+        <Text fw={700}>Original Values</Text>
+        <Text size="sm" c="dimmed">
           Amount: ${rule.amount?.toLocaleString() || 0} | 
           Frequency: {rule.frequency} | 
           Effective: {rule.effectiveDate || 'N/A'}
-        </Box>
+        </Text>
 
-        <Box variant="h3">Override Values</Box>
+        <Text fw={700}>Override Values</Text>
 
-        <FormField label="Amount">
-          <Input
-            value={amount}
-            onChange={({ detail }) => setAmount(detail.value)}
-            type="number"
-            placeholder="Enter amount"
+        <TextInput
+          label="Amount"
+          value={amount}
+          onChange={(e) => setAmount(e.target.value)}
+          type="number"
+          placeholder="Enter amount"
+        />
+
+        <Select
+          label="Frequency"
+          value={frequency}
+          onChange={setFrequency}
+          data={frequencyOptions}
+          placeholder="Select frequency"
+        />
+
+        {frequency !== 'One-time' && (
+          <TextInput
+            label="Effective Date"
+            type="date"
+            value={effectiveDate}
+            onChange={(e) => setEffectiveDate(e.target.value)}
           />
-        </FormField>
-
-        <FormField label="Frequency">
-          <Select
-            selectedOption={frequency}
-            onChange={({ detail }) => setFrequency(detail.selectedOption)}
-            options={frequencyOptions}
-            placeholder="Select frequency"
-          />
-        </FormField>
-
-        {frequency?.value !== 'One-time' && (
-          <FormField label="Effective Date">
-            <DatePicker
-              value={effectiveDate}
-              onChange={({ detail }) => setEffectiveDate(detail.value)}
-              placeholder="YYYY-MM-DD"
-            />
-          </FormField>
         )}
 
-        <FormField label="End Date (Optional)">
-          <DatePicker
-            value={endDate}
-            onChange={({ detail }) => setEndDate(detail.value)}
-            placeholder="YYYY-MM-DD"
-          />
-        </FormField>
+        <TextInput
+          label="End Date (Optional)"
+          type="date"
+          value={endDate}
+          onChange={(e) => setEndDate(e.target.value)}
+        />
 
         {existingOverride && (
-          <Alert type="warning">
+          <Alert color="yellow">
             Removing this override will revert the rule to its base values in this scenario.
           </Alert>
         )}
-      </SpaceBetween>
+
+        <Group justify="flex-end">
+          <Button variant="subtle" onClick={onDismiss}>Cancel</Button>
+          {existingOverride && (
+            <Button color="red" variant="light" onClick={handleRemove}>Remove Override</Button>
+          )}
+          <Button onClick={handleSave}>
+            {existingOverride ? 'Update Override' : 'Create Override'}
+          </Button>
+        </Group>
+      </Stack>
     </Modal>
   )
 }

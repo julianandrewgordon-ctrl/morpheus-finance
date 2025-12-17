@@ -1,14 +1,6 @@
 import { useState, useEffect } from 'react'
-import AppLayout from '@cloudscape-design/components/app-layout'
-import TopNavigation from '@cloudscape-design/components/top-navigation'
-import SideNavigation from '@cloudscape-design/components/side-navigation'
-import Modal from '@cloudscape-design/components/modal'
-import Box from '@cloudscape-design/components/box'
-import SpaceBetween from '@cloudscape-design/components/space-between'
-import Button from '@cloudscape-design/components/button'
-import Input from '@cloudscape-design/components/input'
-import FormField from '@cloudscape-design/components/form-field'
-import Alert from '@cloudscape-design/components/alert'
+import { AppShell, Burger, Group, Text, NavLink, Menu, Button, Modal, Stack, TextInput, Alert, Loader, Center, Box } from '@mantine/core'
+import { useDisclosure } from '@mantine/hooks'
 import LandingPage from './components/LandingPage'
 import Dashboard from './components/Dashboard'
 import RecurringRules from './components/RecurringRules'
@@ -38,11 +30,10 @@ function App() {
   const [showResetModal, setShowResetModal] = useState(false)
   const [resetConfirmation, setResetConfirmation] = useState('')
   const [data, setData] = useState(getBlankData())
-  const [navigationOpen, setNavigationOpen] = useState(true)
+  const [opened, { toggle }] = useDisclosure()
   const [cashFlowStartDate, setCashFlowStartDate] = useState('2025-11-20')
   const [hideEmptyRows, setHideEmptyRows] = useState(false)
   
-  // Check for existing session on mount
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
       setUser(session?.user ?? null)
@@ -58,7 +49,6 @@ function App() {
     return () => subscription.unsubscribe()
   }, [])
   
-  // Logout when window/tab is closed
   useEffect(() => {
     const handleBeforeUnload = async () => {
       if (user) {
@@ -73,27 +63,23 @@ function App() {
     }
   }, [user])
   
-  // Load data from Supabase when user changes
   useEffect(() => {
     if (!user) return
     
     const loadData = async () => {
       try {
-        // Load financial data
         const { data: financialData, error: dataError } = await supabase
           .from('financial_data')
           .select('data')
           .eq('user_id', user.id)
           .single()
         
-        if (dataError && dataError.code !== 'PGRST116') { // PGRST116 = no rows
+        if (dataError && dataError.code !== 'PGRST116') {
           console.error('Error loading financial data:', dataError)
         } else if (financialData) {
-          // Migrate data if needed
           const migratedData = migrateDataIfNeeded(financialData.data)
           setData(migratedData)
           
-          // If migration occurred, save back to database
           if (migratedData !== financialData.data) {
             console.log('Data migrated, saving to database...')
             await supabase
@@ -107,7 +93,6 @@ function App() {
           }
         }
         
-        // Load preferences
         const { data: prefs, error: prefsError } = await supabase
           .from('user_preferences')
           .select('*')
@@ -128,7 +113,6 @@ function App() {
     loadData()
   }, [user])
   
-  // Save data to Supabase whenever it changes
   useEffect(() => {
     if (!user) return
     
@@ -151,12 +135,10 @@ function App() {
       }
     }
     
-    // Debounce saves
     const timeoutId = setTimeout(saveData, 1000)
     return () => clearTimeout(timeoutId)
   }, [data, user])
   
-  // Save preferences to Supabase
   useEffect(() => {
     if (!user) return
     
@@ -190,7 +172,6 @@ function App() {
       recurringRules: [...prev.recurringRules, { 
         ...transaction, 
         id: Date.now()
-        // scenarioIds is already set by QuickAddModal
       }]
     }))
     setShowQuickAdd(false)
@@ -250,7 +231,6 @@ function App() {
       ...prev,
       scenarios: prev.scenarios.filter(scenario => scenario.id !== scenarioId),
       recurringRules: prev.recurringRules.map(rule => {
-        // Remove the deleted scenario from scenarioIds array
         if (rule.scenarioIds && rule.scenarioIds.includes(scenarioId)) {
           const updatedScenarioIds = rule.scenarioIds.filter(id => id !== scenarioId)
           return { 
@@ -306,7 +286,6 @@ function App() {
   const handleConfirmReset = async () => {
     if (resetConfirmation === 'RESET' && user) {
       try {
-        // Delete from Supabase
         await supabase
           .from('financial_data')
           .delete()
@@ -317,7 +296,6 @@ function App() {
           .delete()
           .eq('user_id', user.id)
         
-        // Reset local state
         setData(getBlankData())
         setCashFlowStartDate('2025-11-20')
         setHideEmptyRows(false)
@@ -366,9 +344,9 @@ function App() {
   }
 
   const profileOptions = [
-    { id: 'personal', text: '👤 Personal' },
-    { id: 'business', text: '🏢 Business' },
-    { id: 'rental', text: '🏠 Rental Property' }
+    { id: 'personal', label: 'Personal' },
+    { id: 'business', label: 'Business' },
+    { id: 'rental', label: 'Rental Property' }
   ]
 
   const getContent = () => {
@@ -435,15 +413,12 @@ function App() {
 
   if (loading) {
     return (
-      <div style={{ 
+      <Center style={{ 
         minHeight: '100vh', 
-        display: 'flex', 
-        alignItems: 'center', 
-        justifyContent: 'center',
         background: 'linear-gradient(135deg, #1a0033 0%, #2d1b4e 50%, #1a0033 100%)'
       }}>
-        <Box variant="h1" color="text-body-secondary">Loading...</Box>
-      </div>
+        <Loader color="violet" size="xl" />
+      </Center>
     )
   }
 
@@ -453,68 +428,72 @@ function App() {
 
   return (
     <>
-      <TopNavigation
-        identity={{
-          href: '/',
-          title: `🔮 Morpheus - Financial Planning (${user.email})`,
-        }}
-        utilities={[
-          {
-            type: 'menu-dropdown',
-            text: currentProfile.label,
-            description: 'Switch profile',
-            iconName: 'user-profile',
-            items: [
-              { id: 'personal', text: '👤 Personal' },
-              { id: 'business', text: '🏢 Business' },
-              { id: 'rental', text: '🏠 Rental Property' }
-            ],
-            onItemClick: (e) => {
-              const selected = profileOptions.find(p => p.id === e.detail.id)
-              if (selected) {
-                setCurrentProfile({ label: selected.text, value: e.detail.id })
-              }
-            }
-          },
-          {
-            type: 'button',
-            text: 'Logout',
-            iconName: 'close',
-            onClick: handleLogout
-          }
-        ]}
-      />
-      <AppLayout
-        navigation={
-          <SideNavigation
-            activeHref={activeHref}
-            header={{ text: 'Navigation', href: '/' }}
-            onFollow={(event) => {
-              if (!event.detail.external) {
-                event.preventDefault()
-                setActiveHref(event.detail.href)
-              }
-            }}
-            items={[
-              { type: 'link', text: '📊 Dashboard', href: '/dashboard' },
-              { type: 'link', text: '🎯 Scenarios', href: '/scenarios' },
-              { type: 'link', text: '💾 Data Management', href: '/export' },
-              { type: 'divider' },
-              { 
-                type: 'link', 
-                text: '⚙️ Settings', 
-                href: '/settings',
-                info: <span style={{ fontSize: '0.8em', color: '#666' }}>Coming soon</span>
-              }
-            ]}
+      <AppShell
+        header={{ height: 60 }}
+        navbar={{ width: 250, breakpoint: 'sm', collapsed: { mobile: !opened } }}
+        padding="md"
+      >
+        <AppShell.Header>
+          <Group h="100%" px="md" justify="space-between">
+            <Group>
+              <Burger opened={opened} onClick={toggle} hiddenFrom="sm" size="sm" />
+              <Text size="lg" fw={700} c="violet">Morpheus - Financial Planning</Text>
+              <Text size="sm" c="dimmed">({user.email})</Text>
+            </Group>
+            <Group>
+              <Menu shadow="md" width={200}>
+                <Menu.Target>
+                  <Button variant="subtle">{currentProfile.label}</Button>
+                </Menu.Target>
+                <Menu.Dropdown>
+                  {profileOptions.map(p => (
+                    <Menu.Item key={p.id} onClick={() => setCurrentProfile(p)}>
+                      {p.label}
+                    </Menu.Item>
+                  ))}
+                </Menu.Dropdown>
+              </Menu>
+              <Button variant="subtle" color="red" onClick={handleLogout}>
+                Logout
+              </Button>
+            </Group>
+          </Group>
+        </AppShell.Header>
+
+        <AppShell.Navbar p="md">
+          <NavLink
+            label="Dashboard"
+            active={activeHref === '/dashboard'}
+            onClick={() => setActiveHref('/dashboard')}
+            leftSection={<span>📊</span>}
           />
-        }
-        navigationOpen={navigationOpen}
-        onNavigationChange={({ detail }) => setNavigationOpen(detail.open)}
-        content={getContent()}
-        toolsHide
-        contentType="default"
-      />
+          <NavLink
+            label="Scenarios"
+            active={activeHref === '/scenarios'}
+            onClick={() => setActiveHref('/scenarios')}
+            leftSection={<span>🎯</span>}
+          />
+          <NavLink
+            label="Data Management"
+            active={activeHref === '/export'}
+            onClick={() => setActiveHref('/export')}
+            leftSection={<span>💾</span>}
+          />
+          <Box mt="xl">
+            <NavLink
+              label="Settings"
+              disabled
+              leftSection={<span>⚙️</span>}
+              description="Coming soon"
+            />
+          </Box>
+        </AppShell.Navbar>
+
+        <AppShell.Main>
+          {getContent()}
+        </AppShell.Main>
+      </AppShell>
+
       {showQuickAdd && (
         <QuickAddModal 
           onClose={() => {
@@ -528,37 +507,15 @@ function App() {
       )}
       
       <Modal
-        visible={showResetModal}
-        onDismiss={() => {
+        opened={showResetModal}
+        onClose={() => {
           setShowResetModal(false)
           setResetConfirmation('')
         }}
-        header="Reset All Data to Defaults"
-        footer={
-          <Box float="right">
-            <SpaceBetween direction="horizontal" size="xs">
-              <Button 
-                variant="link" 
-                onClick={() => {
-                  setShowResetModal(false)
-                  setResetConfirmation('')
-                }}
-              >
-                Cancel
-              </Button>
-              <Button 
-                variant="primary"
-                onClick={handleConfirmReset}
-                disabled={resetConfirmation !== 'RESET'}
-              >
-                Reset All Data
-              </Button>
-            </SpaceBetween>
-          </Box>
-        }
+        title="Reset All Data to Defaults"
       >
-        <SpaceBetween size="m">
-          <Alert type="warning" header="Warning: This action cannot be undone">
+        <Stack>
+          <Alert color="yellow" title="Warning: This action cannot be undone">
             Resetting will permanently delete:
             <ul>
               <li>All recurring rules</li>
@@ -569,26 +526,42 @@ function App() {
             </ul>
           </Alert>
           
-          <Box variant="p">
+          <Text>
             <strong>Before proceeding:</strong>
             <ol>
               <li>Export your data using the "Data Management" page</li>
               <li>Save the exported file in a safe location</li>
               <li>Only then proceed with the reset</li>
             </ol>
-          </Box>
+          </Text>
           
-          <FormField 
-            label="Type RESET to confirm" 
-            constraintText="This verification ensures you understand the consequences"
-          >
-            <Input
-              value={resetConfirmation}
-              onChange={({ detail }) => setResetConfirmation(detail.value)}
-              placeholder="Type RESET in capital letters"
-            />
-          </FormField>
-        </SpaceBetween>
+          <TextInput
+            label="Type RESET to confirm"
+            description="This verification ensures you understand the consequences"
+            value={resetConfirmation}
+            onChange={(e) => setResetConfirmation(e.target.value)}
+            placeholder="Type RESET in capital letters"
+          />
+          
+          <Group justify="flex-end">
+            <Button 
+              variant="subtle" 
+              onClick={() => {
+                setShowResetModal(false)
+                setResetConfirmation('')
+              }}
+            >
+              Cancel
+            </Button>
+            <Button 
+              color="red"
+              onClick={handleConfirmReset}
+              disabled={resetConfirmation !== 'RESET'}
+            >
+              Reset All Data
+            </Button>
+          </Group>
+        </Stack>
       </Modal>
     </>
   )

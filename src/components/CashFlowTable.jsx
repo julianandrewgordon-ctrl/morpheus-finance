@@ -1,21 +1,12 @@
-import { useState } from 'react'
-import Table from '@cloudscape-design/components/table'
-import Box from '@cloudscape-design/components/box'
-import Popover from '@cloudscape-design/components/popover'
-import StatusIndicator from '@cloudscape-design/components/status-indicator'
-import Toggle from '@cloudscape-design/components/toggle'
-import SpaceBetween from '@cloudscape-design/components/space-between'
+import { Table, Text, Switch, Group, Box, Tooltip, Stack } from '@mantine/core'
 
 export default function CashFlowTable({ data, startDate, hideEmptyRows, onHideEmptyRowsChange }) {
-  // Filter data based on start date
   let filteredData = startDate 
     ? data.filter(item => item.date >= startDate)
     : data
   
-  // Filter out empty rows if hideEmptyRows is enabled
   if (hideEmptyRows) {
     filteredData = filteredData.filter(item => {
-      // A row is considered "empty" if it has no transactions
       return item.transactions && item.transactions.length > 0
     })
   }
@@ -27,151 +18,99 @@ export default function CashFlowTable({ data, startDate, hideEmptyRows, onHideEm
   }
 
   const getCellColor = (value) => {
-    if (value === 0) return 'text-body-secondary'
-    return value > 0 ? 'text-status-success' : 'text-status-error'
+    if (value === 0) return 'dimmed'
+    return value > 0 ? 'green' : 'red'
   }
 
-  const renderCellWithTooltip = (item, field, categoryFilter = null, forceRed = false) => {
+  const renderCellWithTooltip = (item, field, forceRed = false) => {
     const value = item[field]
-    if (value === 0) return <Box color="text-body-secondary">-</Box>
+    if (value === 0) return <Text c="dimmed">-</Text>
     
-    // Get transactions for this field - filter by column metadata
     let transactions = (item.transactions || []).filter(t => t.column === field)
     
-    // Apply additional category filter if provided
-    if (categoryFilter) {
-      transactions = transactions.filter(categoryFilter)
-    }
-    
-    // Determine color: force red for expense columns, otherwise use getCellColor
-    const color = forceRed ? 'text-status-error' : getCellColor(value)
+    const color = forceRed ? 'red' : getCellColor(value)
     
     if (transactions.length === 0) {
-      return (
-        <Box color={color} variant="span">
-          {formatCurrency(value)}
-        </Box>
-      )
+      return <Text c={color}>{formatCurrency(value)}</Text>
     }
     
     return (
-      <Popover
-        dismissButton={false}
-        position="top"
-        size="small"
-        triggerType="custom"
-        content={
-          <Box>
-            <Box variant="strong">BREAKDOWN:</Box>
+      <Tooltip
+        label={
+          <Stack gap={4}>
+            <Text fw={700} size="sm">BREAKDOWN:</Text>
             {transactions.map((t, idx) => (
-              <Box key={idx} margin={{ top: 'xs' }}>
-                {t.name}: ${Math.abs(t.amount).toLocaleString()}
-                {t.isDraft && ' ⚠'}
+              <Box key={idx}>
+                <Text size="sm">{t.name}: ${Math.abs(t.amount).toLocaleString()}{t.isDraft && ' ⚠'}</Text>
                 {t.phaseInfo && (
-                  <Box fontSize="body-s" color="text-body-secondary">
+                  <Text size="xs" c="dimmed">
                     Phase {t.phaseInfo.phaseNumber}/{t.phaseInfo.totalPhases}
                     {t.phaseInfo.description && `: ${t.phaseInfo.description}`}
-                  </Box>
+                  </Text>
                 )}
               </Box>
             ))}
-            <Box margin={{ top: 'xs' }} paddingTop="xs" style={{ borderTop: '1px solid #ddd' }}>
-              <Box variant="strong">TOTAL: {formatCurrency(value)}</Box>
-            </Box>
-          </Box>
+            <Text fw={700} size="sm" mt={4} style={{ borderTop: '1px solid #ddd', paddingTop: 4 }}>
+              TOTAL: {formatCurrency(value)}
+            </Text>
+          </Stack>
         }
+        multiline
+        w={250}
       >
-        <Box color={color} variant="span" style={{ cursor: 'pointer' }}>
-          {formatCurrency(value)}
-        </Box>
-      </Popover>
+        <Text c={color} style={{ cursor: 'pointer' }}>{formatCurrency(value)}</Text>
+      </Tooltip>
     )
   }
 
-  const columnDefinitions = [
-    {
-      id: 'date',
-      header: 'Date',
-      cell: item => <Box variant="span">{item.date}</Box>,
-      width: 120,
-      minWidth: 120
-    },
-    {
-      id: 'income',
-      header: 'Income',
-      cell: item => renderCellWithTooltip(item, 'income'),
-      width: 100
-    },
-    {
-      id: 'boa',
-      header: 'BOA',
-      cell: item => renderCellWithTooltip(item, 'boa', null, true),
-      width: 100
-    },
-    {
-      id: 'pnc',
-      header: 'PNC',
-      cell: item => renderCellWithTooltip(item, 'pnc', null, true),
-      width: 100
-    },
-    {
-      id: 'variable',
-      header: 'Variable Expenses',
-      cell: item => renderCellWithTooltip(item, 'variable', null, true),
-      width: 130
-    },
-    {
-      id: 'reno',
-      header: 'Reno Costs',
-      cell: item => renderCellWithTooltip(item, 'reno', null, true),
-      width: 100
-    },
-    {
-      id: 'oneOff',
-      header: 'One-off Expenses',
-      cell: item => renderCellWithTooltip(item, 'oneOff', null, true),
-      width: 130
-    },
-    {
-      id: 'netCashFlow',
-      header: 'Net CF',
-      cell: item => <Box color={getCellColor(item.netCashFlow)}>{formatCurrency(item.netCashFlow)}</Box>,
-      width: 100
-    },
-    {
-      id: 'runningBalance',
-      header: 'Running Balance',
-      cell: item => <Box variant="strong">{formatCurrency(item.runningBalance)}</Box>,
-      width: 130
-    }
-  ]
+  if (filteredData.length === 0) {
+    return (
+      <Box ta="center" py="xl">
+        <Text fw={700}>No cash flow data</Text>
+        <Text c="dimmed">No cash flow entries to display.</Text>
+      </Box>
+    )
+  }
 
   return (
-    <SpaceBetween size="m">
-      <Box float="right">
-        <Toggle
+    <Stack gap="md">
+      <Group justify="flex-end">
+        <Switch
           checked={hideEmptyRows}
-          onChange={({ detail }) => onHideEmptyRowsChange(detail.checked)}
-        >
-          Hide empty rows
-        </Toggle>
-      </Box>
-      <Table
-        columnDefinitions={columnDefinitions}
-        items={filteredData}
-        variant="embedded"
-        stickyHeader
-        stripedRows
-        wrapLines={false}
-        empty={
-          <Box textAlign="center" color="inherit">
-            <b>No cash flow data</b>
-            <Box variant="p" color="inherit">
-              No cash flow entries to display.
-            </Box>
-          </Box>
-        }
-      />
-    </SpaceBetween>
+          onChange={(e) => onHideEmptyRowsChange(e.currentTarget.checked)}
+          label="Hide empty rows"
+        />
+      </Group>
+      <Table striped highlightOnHover withTableBorder withColumnBorders>
+        <Table.Thead>
+          <Table.Tr>
+            <Table.Th>Date</Table.Th>
+            <Table.Th>Income</Table.Th>
+            <Table.Th>BOA</Table.Th>
+            <Table.Th>PNC</Table.Th>
+            <Table.Th>Variable Expenses</Table.Th>
+            <Table.Th>Reno Costs</Table.Th>
+            <Table.Th>One-off Expenses</Table.Th>
+            <Table.Th>Net CF</Table.Th>
+            <Table.Th>Running Balance</Table.Th>
+          </Table.Tr>
+        </Table.Thead>
+        <Table.Tbody>
+          {filteredData.map((item, index) => (
+            <Table.Tr key={index}>
+              <Table.Td>{item.date}</Table.Td>
+              <Table.Td>{renderCellWithTooltip(item, 'income')}</Table.Td>
+              <Table.Td>{renderCellWithTooltip(item, 'boa', true)}</Table.Td>
+              <Table.Td>{renderCellWithTooltip(item, 'pnc', true)}</Table.Td>
+              <Table.Td>{renderCellWithTooltip(item, 'variable', true)}</Table.Td>
+              <Table.Td>{renderCellWithTooltip(item, 'reno', true)}</Table.Td>
+              <Table.Td>{renderCellWithTooltip(item, 'oneOff', true)}</Table.Td>
+              <Table.Td><Text c={getCellColor(item.netCashFlow)}>{formatCurrency(item.netCashFlow)}</Text></Table.Td>
+              <Table.Td><Text fw={700}>{formatCurrency(item.runningBalance)}</Text></Table.Td>
+            </Table.Tr>
+          ))}
+        </Table.Tbody>
+      </Table>
+    </Stack>
   )
 }

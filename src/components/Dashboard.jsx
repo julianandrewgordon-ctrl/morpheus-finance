@@ -1,17 +1,6 @@
 import { useState, useMemo } from 'react'
-import Container from '@cloudscape-design/components/container'
-import Header from '@cloudscape-design/components/header'
-import SpaceBetween from '@cloudscape-design/components/space-between'
-import Box from '@cloudscape-design/components/box'
-import Button from '@cloudscape-design/components/button'
-import ColumnLayout from '@cloudscape-design/components/column-layout'
-import FormField from '@cloudscape-design/components/form-field'
-import DatePicker from '@cloudscape-design/components/date-picker'
-import Input from '@cloudscape-design/components/input'
-import Modal from '@cloudscape-design/components/modal'
-import Textarea from '@cloudscape-design/components/textarea'
-import Flashbar from '@cloudscape-design/components/flashbar'
-import Select from '@cloudscape-design/components/select'
+import { Paper, Title, Text, Group, Button, Stack, SimpleGrid, Modal, TextInput, Textarea, Alert, Box, Notification } from '@mantine/core'
+import { DateInput } from '@mantine/dates'
 import BalanceChart from './BalanceChart'
 import CashFlowTable from './CashFlowTable'
 import { calculateCashFlowTable, calculateSummary } from '../utils/cashFlowCalculator'
@@ -41,15 +30,14 @@ export default function Dashboard({
   const [scenarioName, setScenarioName] = useState('')
   const [newScenarioName, setNewScenarioName] = useState('')
   const [startingBalance, setStartingBalance] = useState(data.startingBalance?.toString() || '15000')
-  const [startingBalanceDate, setStartingBalanceDate] = useState(data.startingBalanceDate || '2025-01-01')
+  const [startingBalanceDate, setStartingBalanceDate] = useState(data.startingBalanceDate ? new Date(data.startingBalanceDate) : new Date())
   const [historicalText, setHistoricalText] = useState('')
-  const [flashMessages, setFlashMessages] = useState([])
+  const [notification, setNotification] = useState(null)
   const { scenarios } = data
 
-  // Calculate cash flow table from rules
   const cashFlowData = useMemo(() => {
     const endDate = new Date(cashFlowStartDate)
-    endDate.setFullYear(endDate.getFullYear() + 1) // 1 full year from start
+    endDate.setFullYear(endDate.getFullYear() + 1)
     
     return calculateCashFlowTable(
       data.recurringRules || [],
@@ -61,15 +49,12 @@ export default function Dashboard({
     )
   }, [data.recurringRules, data.startingBalance, data.startingBalanceDate, cashFlowStartDate, data.historicalCashFlows])
 
-  // Calculate cash flow for each scenario
   const scenarioCashFlows = useMemo(() => {
     const endDate = new Date(cashFlowStartDate)
-    endDate.setFullYear(endDate.getFullYear() + 1) // 1 full year from start
+    endDate.setFullYear(endDate.getFullYear() + 1)
     
     const flows = {}
     
-    // Calculate for base scenario (baseline)
-    // Base Scenario = rules WITHOUT scenario assignment AND include = ON
     flows['base'] = calculateCashFlowTable(
       (data.recurringRules || []).filter(rule => {
         const hasNoScenarios = !rule.scenarioIds || rule.scenarioIds.length === 0
@@ -82,31 +67,24 @@ export default function Dashboard({
       data.historicalCashFlows || []
     )
     
-    // Calculate for each scenario
-    // Scenario = Base Scenario rules + Scenario-specific rules (both with include = ON)
-    // Apply overrides to base rules for this scenario
     scenarios.forEach(scenario => {
       if (!scenario.isBaseline) {
-        // Get base scenario rules (no scenario assignment, include = ON)
         let baseRules = (data.recurringRules || []).filter(rule => {
           const hasNoScenarios = !rule.scenarioIds || rule.scenarioIds.length === 0
           return hasNoScenarios && rule.include && !rule.excludedFromScenarios?.includes(scenario.id)
         })
         
-        // Apply overrides to base rules for this scenario
         if (data.ruleOverrides && data.ruleOverrides.length > 0) {
           baseRules = baseRules.map(rule => 
             applyOverridesToRule(rule, data.ruleOverrides, scenario.id)
           )
         }
         
-        // Get scenario-specific rules (assigned to this scenario, include = ON)
         const scenarioRules = (data.recurringRules || []).filter(rule => {
           const isInScenario = rule.scenarioIds && rule.scenarioIds.includes(scenario.id)
           return isInScenario && rule.include
         })
         
-        // Combine both sets
         flows[scenario.id] = calculateCashFlowTable(
           [...baseRules, ...scenarioRules],
           data.startingBalance || 0,
@@ -121,13 +99,17 @@ export default function Dashboard({
     return flows
   }, [data.recurringRules, data.startingBalance, data.startingBalanceDate, cashFlowStartDate, data.historicalCashFlows, scenarios])
 
-  // Calculate summary from cash flow data based on selected scenario
   const summary = useMemo(() => {
     const scenarioData = selectedScenario === 'base' 
       ? scenarioCashFlows['base'] 
       : (scenarioCashFlows[selectedScenario] || cashFlowData)
     return calculateSummary(scenarioData || cashFlowData, data.startingBalance || 0)
   }, [cashFlowData, data.startingBalance, selectedScenario, scenarioCashFlows])
+
+  const showNotification = (type, message) => {
+    setNotification({ type, message })
+    setTimeout(() => setNotification(null), 3000)
+  }
 
   const handleCreateNewScenario = () => {
     if (newScenarioName.trim()) {
@@ -139,12 +121,7 @@ export default function Dashboard({
       onAddScenario(newScenario)
       setShowNewScenarioModal(false)
       setNewScenarioName('')
-      setFlashMessages([{
-        type: 'success',
-        content: `Created new scenario: ${newScenarioName.trim()}. All base scenario rules are included by default.`,
-        dismissible: true,
-        onDismiss: () => setFlashMessages([])
-      }])
+      showNotification('success', `Created new scenario: ${newScenarioName.trim()}`)
     }
   }
 
@@ -160,12 +137,7 @@ export default function Dashboard({
       setShowScenarioModal(false)
       setEditingScenario(null)
       setScenarioName('')
-      setFlashMessages([{
-        type: 'success',
-        content: 'Scenario name updated successfully',
-        dismissible: true,
-        onDismiss: () => setFlashMessages([])
-      }])
+      showNotification('success', 'Scenario name updated successfully')
     }
   }
 
@@ -175,26 +147,17 @@ export default function Dashboard({
       setShowScenarioModal(false)
       setEditingScenario(null)
       setScenarioName('')
-      setFlashMessages([{
-        type: 'success',
-        content: `Deleted scenario: ${editingScenario.name}`,
-        dismissible: true,
-        onDismiss: () => setFlashMessages([])
-      }])
+      showNotification('success', `Deleted scenario: ${editingScenario.name}`)
     }
   }
 
   const handleSaveStartingBalance = () => {
     const balance = parseFloat(startingBalance)
     if (!isNaN(balance) && startingBalanceDate) {
-      onUpdateStartingBalance(balance, startingBalanceDate)
+      const dateStr = startingBalanceDate.toISOString().split('T')[0]
+      onUpdateStartingBalance(balance, dateStr)
       setShowStartingBalanceModal(false)
-      setFlashMessages([{
-        type: 'success',
-        content: `Starting balance set to $${balance.toLocaleString()} as of ${startingBalanceDate}`,
-        dismissible: true,
-        onDismiss: () => setFlashMessages([])
-      }])
+      showNotification('success', `Starting balance set to $${balance.toLocaleString()} as of ${dateStr}`)
     }
   }
 
@@ -207,18 +170,14 @@ export default function Dashboard({
         const line = lines[i].trim()
         if (!line) continue
 
-        // Try JSON format
         if (line.startsWith('{')) {
           try {
             const cf = JSON.parse(line)
             newCashFlows.push(cf)
             continue
-          } catch (e) {
-            // Not JSON, try CSV
-          }
+          } catch (e) {}
         }
 
-        // CSV format: Date, Description, Amount, Category, Account
         const parts = line.split(',').map(p => p.trim())
         if (parts.length >= 3) {
           newCashFlows.push({
@@ -235,392 +194,213 @@ export default function Dashboard({
         onBatchAddHistoricalCashFlows(newCashFlows)
         setShowHistoricalModal(false)
         setHistoricalText('')
-        setFlashMessages([{
-          type: 'success',
-          content: `Successfully added ${newCashFlows.length} historical cash flow(s)`,
-          dismissible: true,
-          onDismiss: () => setFlashMessages([])
-        }])
+        showNotification('success', `Successfully added ${newCashFlows.length} historical cash flow(s)`)
       } else {
-        setFlashMessages([{
-          type: 'error',
-          content: 'No valid cash flows found. Please check the format.',
-          dismissible: true,
-          onDismiss: () => setFlashMessages([])
-        }])
+        showNotification('error', 'No valid cash flows found. Please check the format.')
       }
     } catch (error) {
-      setFlashMessages([{
-        type: 'error',
-        content: `Error parsing cash flows: ${error.message}`,
-        dismissible: true,
-        onDismiss: () => setFlashMessages([])
-      }])
+      showNotification('error', `Error parsing cash flows: ${error.message}`)
     }
   }
 
+  const formatCurrency = (val) => `$${val.toLocaleString()}`
+
   return (
     <>
-      <Flashbar items={flashMessages} />
-      <SpaceBetween size="l">
-        <Header 
-          variant="h1"
-          actions={
-            <SpaceBetween direction="horizontal" size="xs">
-              <Button iconName="edit" onClick={() => setShowStartingBalanceModal(true)}>
-                Set Starting Balance
-              </Button>
-              <Button iconName="upload" onClick={() => setShowHistoricalModal(true)}>
-                Import Historical Data
-              </Button>
-            </SpaceBetween>
-          }
+      {notification && (
+        <Notification 
+          color={notification.type === 'success' ? 'green' : 'red'}
+          onClose={() => setNotification(null)}
+          style={{ position: 'fixed', top: 20, right: 20, zIndex: 1000 }}
         >
-          Dashboard
-        </Header>
+          {notification.message}
+        </Notification>
+      )}
 
-        {/* Starting Balance Display */}
-        <Container>
-          <SpaceBetween size="xs">
-            <Box variant="awsui-key-label">Starting Balance</Box>
-            <Box variant="h2" fontSize="heading-l">
-              ${(data.startingBalance || 0).toLocaleString()}
-            </Box>
-            <Box variant="small" color="text-body-secondary">
-              As of {data.startingBalanceDate || 'Not set'}
-            </Box>
-          </SpaceBetween>
-        </Container>
+      <Stack gap="lg">
+        <Group justify="space-between">
+          <Title order={1}>Dashboard</Title>
+          <Group>
+            <Button variant="light" onClick={() => setShowStartingBalanceModal(true)}>
+              Set Starting Balance
+            </Button>
+            <Button variant="light" onClick={() => setShowHistoricalModal(true)}>
+              Import Historical Data
+            </Button>
+          </Group>
+        </Group>
 
-        {/* Summary Cards */}
-        <Container>
-          <ColumnLayout columns={4} variant="text-grid">
-            <div>
-              <Box variant="awsui-key-label">Current Balance</Box>
-              <Box variant="h1" color="text-status-success" fontSize="display-l">
-                ${summary.currentBalance.toLocaleString()}
-              </Box>
-              <Box fontSize="body-s">
-                <Box color="text-status-success" variant="span">
-                  ↑ +${summary.balanceChange.toLocaleString()}
-                </Box>
-                {' '}
-                <Box color="text-body-secondary" variant="span">
-                  (as of {new Date().toISOString().split('T')[0]})
-                </Box>
-              </Box>
-            </div>
-            <div>
-              <Box variant="awsui-key-label">Projected (EOY)</Box>
-              <Box variant="h1" fontSize="display-l">
-                ${summary.projectedEOY.toLocaleString()}
-              </Box>
-            </div>
-            <div>
-              <Box variant="awsui-key-label">Total Income</Box>
-              <Box variant="h1" color="text-status-success" fontSize="display-l">
-                ${summary.totalIncome.toLocaleString()}
-              </Box>
-            </div>
-            <div>
-              <Box variant="awsui-key-label">Total Expenses</Box>
-              <Box variant="h1" color="text-status-error" fontSize="display-l">
-                ${summary.totalExpenses.toLocaleString()}
-              </Box>
-            </div>
-          </ColumnLayout>
-        </Container>
+        <Paper p="md" withBorder>
+          <Text size="sm" c="dimmed">Starting Balance</Text>
+          <Title order={2}>{formatCurrency(data.startingBalance || 0)}</Title>
+          <Text size="sm" c="dimmed">As of {data.startingBalanceDate || 'Not set'}</Text>
+        </Paper>
 
-        {/* Scenario Selector */}
-        <Container
-          header={
-            <Header
-              variant="h2"
-              actions={
-                <Button variant="primary" iconName="add-plus" onClick={() => setShowNewScenarioModal(true)}>
-                  New Scenario
-                </Button>
-              }
-            >
-              Scenario Selector
-            </Header>
-          }
-        >
-          <SpaceBetween size="xs" direction="horizontal">
-            {/* Base Scenario Button */}
+        <SimpleGrid cols={{ base: 1, sm: 2, lg: 4 }}>
+          <Paper p="md" withBorder>
+            <Text size="sm" c="dimmed">Current Balance</Text>
+            <Title order={2} c="green">{formatCurrency(summary.currentBalance)}</Title>
+            <Text size="xs" c="green">↑ +{formatCurrency(summary.balanceChange)}</Text>
+          </Paper>
+          <Paper p="md" withBorder>
+            <Text size="sm" c="dimmed">Projected (EOY)</Text>
+            <Title order={2}>{formatCurrency(summary.projectedEOY)}</Title>
+          </Paper>
+          <Paper p="md" withBorder>
+            <Text size="sm" c="dimmed">Total Income</Text>
+            <Title order={2} c="green">{formatCurrency(summary.totalIncome)}</Title>
+          </Paper>
+          <Paper p="md" withBorder>
+            <Text size="sm" c="dimmed">Total Expenses</Text>
+            <Title order={2} c="red">{formatCurrency(summary.totalExpenses)}</Title>
+          </Paper>
+        </SimpleGrid>
+
+        <Paper p="md" withBorder>
+          <Group justify="space-between" mb="md">
+            <Title order={3}>Scenario Selector</Title>
+            <Button onClick={() => setShowNewScenarioModal(true)}>New Scenario</Button>
+          </Group>
+          <Group>
             <Button
-              variant={selectedScenario === 'base' ? 'primary' : 'normal'}
+              variant={selectedScenario === 'base' ? 'filled' : 'light'}
               onClick={() => setSelectedScenario('base')}
             >
               {selectedScenario === 'base' ? '⦿' : '○'} Base Scenario
             </Button>
-            
-            {/* Other Scenario Buttons */}
             {scenarios.filter(s => !s.isBaseline).map(scenario => (
-              <SpaceBetween key={scenario.id} size="xxs" direction="horizontal">
+              <Group key={scenario.id} gap="xs">
                 <Button
-                  variant={selectedScenario === scenario.id ? 'primary' : 'normal'}
+                  variant={selectedScenario === scenario.id ? 'filled' : 'light'}
                   onClick={() => setSelectedScenario(scenario.id)}
                 >
                   {selectedScenario === scenario.id ? '⦿' : '○'} {scenario.name}
                 </Button>
-                <Button
-                  variant="icon"
-                  iconName="edit"
-                  onClick={() => handleEditScenario(scenario)}
-                />
-              </SpaceBetween>
+                <Button variant="subtle" size="xs" onClick={() => handleEditScenario(scenario)}>
+                  ✎
+                </Button>
+              </Group>
             ))}
-            <Button disabled>○ (Empty)</Button>
-            <Button disabled>○ (Empty)</Button>
-          </SpaceBetween>
-        </Container>
+          </Group>
+        </Paper>
 
-        {/* Running Balance Chart */}
-        <Container
-          header={
-            <Header
-              variant="h2"
-              description="Visual representation of your cash flow over time"
-            >
-              Running Balance Chart
-            </Header>
-          }
-        >
-          <SpaceBetween size="m">
-            <BalanceChart 
-              cashFlowData={cashFlowData} 
-              startingBalanceDate={data.startingBalanceDate || cashFlowStartDate}
-              scenarioCashFlows={scenarioCashFlows}
-              scenarios={scenarios}
-              selectedScenario={selectedScenario}
-            />
-            <SpaceBetween size="xs" direction="horizontal">
-              <Box variant="span">
-                {data.startingBalanceDate || cashFlowStartDate} - {cashFlowData.length > 0 ? cashFlowData[cashFlowData.length - 1].date : 'N/A'}
-              </Box>
-            </SpaceBetween>
-          </SpaceBetween>
-        </Container>
+        <Paper p="md" withBorder>
+          <Title order={3} mb="md">Running Balance Chart</Title>
+          <BalanceChart 
+            cashFlowData={cashFlowData} 
+            startingBalanceDate={data.startingBalanceDate || cashFlowStartDate}
+            scenarioCashFlows={scenarioCashFlows}
+            scenarios={scenarios}
+            selectedScenario={selectedScenario}
+          />
+        </Paper>
 
-        {/* Cash Flow Table */}
-        <Container
-          header={
-            <Header
-              variant="h2"
-              actions={
-                <SpaceBetween direction="horizontal" size="xs">
-                  <FormField label="Start Date">
-                    <DatePicker
-                      value={cashFlowStartDate}
-                      onChange={({ detail }) => onStartDateChange(detail.value)}
-                      placeholder="YYYY-MM-DD"
-                    />
-                  </FormField>
-                  <Button variant="primary" iconName="add-plus" onClick={onQuickAdd}>
-                    Quick Add Transaction
-                  </Button>
-                </SpaceBetween>
-              }
-            >
-              Cash Flow Table
-            </Header>
-          }
-        >
-          <SpaceBetween size="m">
-            <CashFlowTable 
-              data={selectedScenario === 'base' ? scenarioCashFlows['base'] : (scenarioCashFlows[selectedScenario] || cashFlowData)}
-              startDate={cashFlowStartDate}
-              hideEmptyRows={hideEmptyRows}
-              onHideEmptyRowsChange={onHideEmptyRowsChange}
-            />
-            <Box variant="small" color="text-body-secondary">
-              ⚠ = Draft/Scenario Entry | 🔒 = Balance Override Active
-            </Box>
-          </SpaceBetween>
-        </Container>
-      </SpaceBetween>
+        <Paper p="md" withBorder>
+          <Group justify="space-between" mb="md">
+            <Title order={3}>Cash Flow Table</Title>
+            <Group>
+              <TextInput
+                type="date"
+                value={cashFlowStartDate}
+                onChange={(e) => onStartDateChange(e.target.value)}
+                label="Start Date"
+                size="xs"
+              />
+              <Button onClick={onQuickAdd}>Quick Add Transaction</Button>
+            </Group>
+          </Group>
+          <CashFlowTable 
+            data={selectedScenario === 'base' ? scenarioCashFlows['base'] : (scenarioCashFlows[selectedScenario] || cashFlowData)}
+            startDate={cashFlowStartDate}
+            hideEmptyRows={hideEmptyRows}
+            onHideEmptyRowsChange={onHideEmptyRowsChange}
+          />
+          <Text size="xs" c="dimmed" mt="sm">⚠ = Draft/Scenario Entry | 🔒 = Balance Override Active</Text>
+        </Paper>
+      </Stack>
 
-      {/* Edit Scenario Modal */}
-      <Modal
-        visible={showScenarioModal}
-        onDismiss={() => {
-          setShowScenarioModal(false)
-          setEditingScenario(null)
-          setScenarioName('')
-        }}
-        header="Edit Scenario"
-        footer={
-          <Box float="right">
-            <SpaceBetween direction="horizontal" size="xs">
-              <Button 
-                variant="link" 
-                onClick={() => {
-                  setShowScenarioModal(false)
-                  setEditingScenario(null)
-                  setScenarioName('')
-                }}
-              >
-                Cancel
-              </Button>
-              <Button 
-                onClick={handleDeleteScenario}
-                iconName="remove"
-              >
-                Delete Scenario
-              </Button>
-              <Button variant="primary" onClick={handleSaveScenario}>
-                Save Changes
-              </Button>
-            </SpaceBetween>
-          </Box>
-        }
-      >
-        <SpaceBetween size="m">
-          <FormField label="Scenario Name">
-            <Input
-              value={scenarioName}
-              onChange={({ detail }) => setScenarioName(detail.value)}
-              placeholder="Enter scenario name"
-            />
-          </FormField>
-          <Box variant="p" color="text-body-secondary">
-            <strong>Note:</strong> Deleting this scenario will remove it and unassign all rules that were assigned to it. The rules will remain but will be moved to the base scenario.
-          </Box>
-        </SpaceBetween>
+      <Modal opened={showScenarioModal} onClose={() => { setShowScenarioModal(false); setEditingScenario(null); }} title="Edit Scenario">
+        <Stack>
+          <TextInput
+            label="Scenario Name"
+            value={scenarioName}
+            onChange={(e) => setScenarioName(e.target.value)}
+            placeholder="Enter scenario name"
+          />
+          <Text size="sm" c="dimmed">
+            <strong>Note:</strong> Deleting this scenario will remove it and unassign all rules that were assigned to it.
+          </Text>
+          <Group justify="flex-end">
+            <Button variant="subtle" onClick={() => { setShowScenarioModal(false); setEditingScenario(null); }}>Cancel</Button>
+            <Button color="red" onClick={handleDeleteScenario}>Delete Scenario</Button>
+            <Button onClick={handleSaveScenario}>Save Changes</Button>
+          </Group>
+        </Stack>
       </Modal>
 
-      {/* Starting Balance Modal */}
-      <Modal
-        visible={showStartingBalanceModal}
-        onDismiss={() => setShowStartingBalanceModal(false)}
-        header="Set Starting Balance"
-        footer={
-          <Box float="right">
-            <SpaceBetween direction="horizontal" size="xs">
-              <Button variant="link" onClick={() => setShowStartingBalanceModal(false)}>
-                Cancel
-              </Button>
-              <Button variant="primary" onClick={handleSaveStartingBalance}>
-                Save
-              </Button>
-            </SpaceBetween>
-          </Box>
-        }
-      >
-        <SpaceBetween size="m">
-          <FormField label="Starting Balance" constraintText="Enter the balance amount">
-            <Input
-              value={startingBalance}
-              onChange={({ detail }) => setStartingBalance(detail.value)}
-              type="number"
-              placeholder="15000"
-            />
-          </FormField>
-          <FormField label="As of Date" constraintText="The date of this starting balance">
-            <DatePicker
-              value={startingBalanceDate}
-              onChange={({ detail }) => setStartingBalanceDate(detail.value)}
-              placeholder="YYYY/MM/DD"
-            />
-          </FormField>
-        </SpaceBetween>
+      <Modal opened={showStartingBalanceModal} onClose={() => setShowStartingBalanceModal(false)} title="Set Starting Balance">
+        <Stack>
+          <TextInput
+            label="Starting Balance"
+            description="Enter the balance amount"
+            value={startingBalance}
+            onChange={(e) => setStartingBalance(e.target.value)}
+            type="number"
+            placeholder="15000"
+          />
+          <TextInput
+            label="As of Date"
+            type="date"
+            value={startingBalanceDate ? startingBalanceDate.toISOString().split('T')[0] : ''}
+            onChange={(e) => setStartingBalanceDate(new Date(e.target.value))}
+          />
+          <Group justify="flex-end">
+            <Button variant="subtle" onClick={() => setShowStartingBalanceModal(false)}>Cancel</Button>
+            <Button onClick={handleSaveStartingBalance}>Save</Button>
+          </Group>
+        </Stack>
       </Modal>
 
-      {/* New Scenario Modal */}
-      <Modal
-        visible={showNewScenarioModal}
-        onDismiss={() => {
-          setShowNewScenarioModal(false)
-          setNewScenarioName('')
-        }}
-        header="Create New Scenario"
-        footer={
-          <Box float="right">
-            <SpaceBetween direction="horizontal" size="xs">
-              <Button 
-                variant="link" 
-                onClick={() => {
-                  setShowNewScenarioModal(false)
-                  setNewScenarioName('')
-                }}
-              >
-                Cancel
-              </Button>
-              <Button variant="primary" onClick={handleCreateNewScenario}>
-                Create Scenario
-              </Button>
-            </SpaceBetween>
-          </Box>
-        }
-      >
-        <SpaceBetween size="m">
-          <FormField label="Scenario Name" constraintText="Enter a descriptive name for this scenario">
-            <Input
-              value={newScenarioName}
-              onChange={({ detail }) => setNewScenarioName(detail.value)}
-              placeholder="e.g., Car Purchase, Home Renovation, Gift Cards"
-            />
-          </FormField>
-          <Box variant="p" color="text-body-secondary">
+      <Modal opened={showNewScenarioModal} onClose={() => { setShowNewScenarioModal(false); setNewScenarioName(''); }} title="Create New Scenario">
+        <Stack>
+          <TextInput
+            label="Scenario Name"
+            description="Enter a descriptive name for this scenario"
+            value={newScenarioName}
+            onChange={(e) => setNewScenarioName(e.target.value)}
+            placeholder="e.g., Car Purchase, Home Renovation"
+          />
+          <Text size="sm" c="dimmed">
             <strong>What are scenarios?</strong><br />
-            Scenarios let you model "what-if" situations by building on top of your base scenario. 
-            Each scenario automatically includes all your base scenario rules, plus any additional rules you add to it.
-          </Box>
-          <Box variant="p" color="text-body-secondary">
-            <strong>How scenarios work:</strong><br />
-            • New scenarios start with ALL base scenario rules included<br />
-            • Add scenario-specific rules (e.g., car payment, new expenses)<br />
-            • Optionally exclude base scenario rules you don't want in this scenario<br />
-            • Compare scenarios on the chart to see different outcomes
-          </Box>
-          <Box variant="p" color="text-body-secondary">
-            <strong>Example:</strong> Create a "Car Purchase" scenario to see your finances with a car payment added to your current expenses.
-          </Box>
-        </SpaceBetween>
+            Scenarios let you model "what-if" situations by building on top of your base scenario.
+          </Text>
+          <Group justify="flex-end">
+            <Button variant="subtle" onClick={() => { setShowNewScenarioModal(false); setNewScenarioName(''); }}>Cancel</Button>
+            <Button onClick={handleCreateNewScenario}>Create Scenario</Button>
+          </Group>
+        </Stack>
       </Modal>
 
-      {/* Historical Cash Flow Modal */}
-      <Modal
-        visible={showHistoricalModal}
-        onDismiss={() => setShowHistoricalModal(false)}
-        header="Import Historical Cash Flows"
-        footer={
-          <Box float="right">
-            <SpaceBetween direction="horizontal" size="xs">
-              <Button variant="link" onClick={() => setShowHistoricalModal(false)}>
-                Cancel
-              </Button>
-              <Button variant="primary" onClick={handleBatchHistoricalUpload}>
-                Import
-              </Button>
-            </SpaceBetween>
-          </Box>
-        }
-      >
-        <SpaceBetween size="m">
-          <Box variant="p">
-            Paste your historical cash flows in CSV or JSON format. Each line should contain:
-          </Box>
-          <Box variant="p" color="text-body-secondary">
-            <strong>CSV Format:</strong> Date, Description, Amount, Category, Account
-          </Box>
-          <Box variant="p" color="text-body-secondary">
+      <Modal opened={showHistoricalModal} onClose={() => setShowHistoricalModal(false)} title="Import Historical Cash Flows" size="lg">
+        <Stack>
+          <Text>Paste your historical cash flows in CSV format:</Text>
+          <Text size="xs" c="dimmed">
+            <strong>Format:</strong> Date, Description, Amount, Category, Account<br />
             <strong>Example:</strong><br />
             2025-01-15, Paycheck, 5000, Income, BOA<br />
-            2025-01-20, Grocery Store, -150, Variable Expense, PNC<br />
-            2025-02-01, Rent Payment, -2000, Cash Expense, BOA
-          </Box>
-          <Box variant="p" color="text-body-secondary">
-            <strong>JSON Format:</strong> One JSON object per line with fields: date, description, amount, category, account
-          </Box>
+            2025-01-20, Grocery Store, -150, Variable Expense, PNC
+          </Text>
           <Textarea
             value={historicalText}
-            onChange={({ detail }) => setHistoricalText(detail.value)}
-            placeholder="Paste historical cash flows here..."
-            rows={10}
+            onChange={(e) => setHistoricalText(e.target.value)}
+            placeholder="Paste your data here..."
+            minRows={8}
           />
-        </SpaceBetween>
+          <Group justify="flex-end">
+            <Button variant="subtle" onClick={() => setShowHistoricalModal(false)}>Cancel</Button>
+            <Button onClick={handleBatchHistoricalUpload}>Import</Button>
+          </Group>
+        </Stack>
       </Modal>
     </>
   )

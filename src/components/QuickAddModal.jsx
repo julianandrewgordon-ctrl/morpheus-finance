@@ -1,15 +1,5 @@
 import { useState } from 'react'
-import Modal from '@cloudscape-design/components/modal'
-import Box from '@cloudscape-design/components/box'
-import SpaceBetween from '@cloudscape-design/components/space-between'
-import Button from '@cloudscape-design/components/button'
-import FormField from '@cloudscape-design/components/form-field'
-import Input from '@cloudscape-design/components/input'
-import Select from '@cloudscape-design/components/select'
-import RadioGroup from '@cloudscape-design/components/radio-group'
-import DatePicker from '@cloudscape-design/components/date-picker'
-import Textarea from '@cloudscape-design/components/textarea'
-import Checkbox from '@cloudscape-design/components/checkbox'
+import { Modal, Stack, TextInput, Select, Radio, Group, Button, Textarea, Checkbox, Text } from '@mantine/core'
 
 export default function QuickAddModal({ onClose, onAdd, scenarioId, scenarios }) {
   const scenarioName = scenarioId 
@@ -18,181 +8,167 @@ export default function QuickAddModal({ onClose, onAdd, scenarioId, scenarios })
   const [formData, setFormData] = useState({
     name: '',
     amount: '',
-    type: { label: 'Income', value: 'Income' },
-    account: { label: 'BOA', value: 'BOA' },
+    type: 'Income',
+    account: 'BOA',
     frequency: 'one-time',
     impactDate: '',
     endDate: '',
     description: '',
     isDraft: false,
-    scenario: { label: 'Gift Card A', value: 'giftcard' }
+    scenario: 'giftcard'
   })
 
   const handleSubmit = () => {
     let amount = parseFloat(formData.amount)
     
-    // Automatically ensure expenses are negative
-    const isExpenseType = formData.type.value !== 'Income'
+    const isExpenseType = formData.type !== 'Income'
     if (isExpenseType && amount > 0) {
       amount = -amount
     }
-    // Ensure income is positive
-    if (formData.type.value === 'Income' && amount < 0) {
+    if (formData.type === 'Income' && amount < 0) {
       amount = Math.abs(amount)
     }
     
     onAdd({
       name: formData.name,
       amount: amount,
-      type: formData.type.value,
-      account: formData.account.value,
+      type: formData.type,
+      account: formData.account,
       frequency: formData.frequency === 'one-time' ? 'One-time' : formData.frequency,
       impactDate: formData.frequency === 'one-time' ? formData.impactDate : undefined,
       effectiveDate: formData.frequency !== 'one-time' ? formData.impactDate : undefined,
       endDate: formData.endDate || null,
       description: formData.description,
       isDraft: formData.isDraft,
-      scenarioIds: formData.isDraft && formData.scenario.value ? [formData.scenario.value] : [],
+      scenarioIds: formData.isDraft && formData.scenario ? [formData.scenario] : [],
       include: true
     })
   }
 
   const typeOptions = [
-    { label: 'Income', value: 'Income' },
-    { label: 'Cash Expense', value: 'Cash Expense' },
-    { label: 'Variable Expense', value: 'Variable Expense' },
-    { label: 'Renovation/Moving Costs', value: 'Renovation/Moving Costs' },
-    { label: 'One Time Expenses', value: 'One Time Expenses' }
+    { value: 'Income', label: 'Income' },
+    { value: 'Cash Expense', label: 'Cash Expense' },
+    { value: 'Variable Expense', label: 'Variable Expense' },
+    { value: 'Renovation/Moving Costs', label: 'Renovation/Moving Costs' },
+    { value: 'One Time Expenses', label: 'One Time Expenses' }
   ]
 
   const accountOptions = [
-    { label: 'BOA', value: 'BOA' },
-    { label: 'PNC', value: 'PNC' },
-    { label: 'Other', value: 'Other' }
+    { value: 'BOA', label: 'BOA' },
+    { value: 'PNC', label: 'PNC' },
+    { value: 'Other', label: 'Other' }
   ]
 
   const scenarioOptions = [
-    { label: 'Gift Card A', value: 'giftcard' },
-    { label: 'Car Purchase', value: 'car' }
+    { value: 'giftcard', label: 'Gift Card A' },
+    { value: 'car', label: 'Car Purchase' }
   ]
 
   return (
     <Modal
-      onDismiss={onClose}
-      visible={true}
-      header={`Add New Rule${scenarioId ? ` to ${scenarioName}` : ' to Base Scenario'}`}
-      footer={
-        <Box float="right">
-          <SpaceBetween direction="horizontal" size="xs">
-            <Button variant="link" onClick={onClose}>
-              Cancel
-            </Button>
-            <Button variant="primary" onClick={handleSubmit}>
-              Add Transaction
-            </Button>
-          </SpaceBetween>
-        </Box>
-      }
+      opened={true}
+      onClose={onClose}
+      title={`Add New Rule${scenarioId ? ` to ${scenarioName}` : ' to Base Scenario'}`}
     >
-      <SpaceBetween size="m">
-        <FormField label="Transaction Name" constraintText="Required">
-          <Input
-            value={formData.name}
-            onChange={({ detail }) => setFormData(prev => ({ ...prev, name: detail.value }))}
-            placeholder="e.g., Holiday Gift"
-          />
-        </FormField>
+      <Stack gap="md">
+        <TextInput
+          label="Transaction Name"
+          required
+          value={formData.name}
+          onChange={(e) => setFormData(prev => ({ ...prev, name: e.target.value }))}
+          placeholder="e.g., Holiday Gift"
+        />
 
-        <FormField label="Amount" constraintText="Enter positive values. Sign will be applied automatically based on type.">
-          <Input
-            value={formData.amount}
-            onChange={({ detail }) => setFormData(prev => ({ ...prev, amount: detail.value }))}
-            type="number"
-            placeholder="Enter amount (e.g., 100)"
-          />
-        </FormField>
+        <TextInput
+          label="Amount"
+          description="Enter positive values. Sign will be applied automatically based on type."
+          value={formData.amount}
+          onChange={(e) => setFormData(prev => ({ ...prev, amount: e.target.value }))}
+          type="number"
+          placeholder="Enter amount (e.g., 100)"
+        />
 
-        <FormField label="Type" constraintText="Required">
+        <Select
+          label="Type"
+          required
+          value={formData.type}
+          onChange={(val) => setFormData(prev => ({ ...prev, type: val }))}
+          data={typeOptions}
+        />
+
+        {formData.type !== 'Income' && (
           <Select
-            selectedOption={formData.type}
-            onChange={({ detail }) => setFormData(prev => ({ ...prev, type: detail.selectedOption }))}
-            options={typeOptions}
+            label="Account"
+            required
+            value={formData.account}
+            onChange={(val) => setFormData(prev => ({ ...prev, account: val }))}
+            data={accountOptions}
           />
-        </FormField>
-
-        {formData.type.value !== 'Income' && (
-          <FormField label="Account" constraintText="Required for expenses">
-            <Select
-              selectedOption={formData.account}
-              onChange={({ detail }) => setFormData(prev => ({ ...prev, account: detail.selectedOption }))}
-              options={accountOptions}
-            />
-          </FormField>
         )}
 
-        <FormField label="Frequency" constraintText="Required">
-          <RadioGroup
-            value={formData.frequency}
-            onChange={({ detail }) => setFormData(prev => ({ ...prev, frequency: detail.value }))}
-            items={[
-              { value: 'one-time', label: 'One-time' },
-              { value: 'Weekly', label: 'Weekly' },
-              { value: 'Bi-weekly', label: 'Bi-weekly' },
-              { value: 'Monthly', label: 'Monthly' }
-            ]}
-          />
-        </FormField>
+        <Radio.Group
+          label="Frequency"
+          required
+          value={formData.frequency}
+          onChange={(val) => setFormData(prev => ({ ...prev, frequency: val }))}
+        >
+          <Group mt="xs">
+            <Radio value="one-time" label="One-time" />
+            <Radio value="Weekly" label="Weekly" />
+            <Radio value="Bi-weekly" label="Bi-weekly" />
+            <Radio value="Monthly" label="Monthly" />
+          </Group>
+        </Radio.Group>
 
         {formData.frequency === 'one-time' && (
-          <FormField label="Impact Date" constraintText="Required for one-time entries">
-            <DatePicker
-              value={formData.impactDate}
-              onChange={({ detail }) => setFormData(prev => ({ ...prev, impactDate: detail.value }))}
-              placeholder="YYYY/MM/DD"
-            />
-          </FormField>
+          <TextInput
+            label="Impact Date"
+            required
+            type="date"
+            value={formData.impactDate}
+            onChange={(e) => setFormData(prev => ({ ...prev, impactDate: e.target.value }))}
+          />
         )}
 
-        <FormField label="End Date" constraintText="Optional">
-          <DatePicker
-            value={formData.endDate}
-            onChange={({ detail }) => setFormData(prev => ({ ...prev, endDate: detail.value }))}
-            placeholder="YYYY/MM/DD"
-          />
-        </FormField>
+        <TextInput
+          label="End Date"
+          description="Optional"
+          type="date"
+          value={formData.endDate}
+          onChange={(e) => setFormData(prev => ({ ...prev, endDate: e.target.value }))}
+        />
 
-        <FormField label="Description" constraintText="Optional">
-          <Textarea
-            value={formData.description}
-            onChange={({ detail }) => setFormData(prev => ({ ...prev, description: detail.value }))}
-            placeholder="Add context or notes..."
-            rows={3}
-          />
-        </FormField>
+        <Textarea
+          label="Description"
+          description="Optional"
+          value={formData.description}
+          onChange={(e) => setFormData(prev => ({ ...prev, description: e.target.value }))}
+          placeholder="Add context or notes..."
+          minRows={3}
+        />
 
-        <FormField>
-          <Checkbox
-            checked={formData.isDraft}
-            onChange={({ detail }) => setFormData(prev => ({ ...prev, isDraft: detail.checked }))}
-          >
-            Add as Draft/Scenario Entry
-          </Checkbox>
-        </FormField>
+        <Checkbox
+          checked={formData.isDraft}
+          onChange={(e) => setFormData(prev => ({ ...prev, isDraft: e.target.checked }))}
+          label="Add as Draft/Scenario Entry"
+        />
 
         {formData.isDraft && (
-          <FormField label="Scenario">
-            <Select
-              selectedOption={formData.scenario}
-              onChange={({ detail }) => setFormData(prev => ({ ...prev, scenario: detail.selectedOption }))}
-              options={scenarioOptions}
-            />
-          </FormField>
+          <Select
+            label="Scenario"
+            value={formData.scenario}
+            onChange={(val) => setFormData(prev => ({ ...prev, scenario: val }))}
+            data={scenarioOptions}
+          />
         )}
 
-        <Box variant="small" color="text-body-secondary">
-          Tip: Press Enter to submit, Esc to cancel
-        </Box>
-      </SpaceBetween>
+        <Text size="xs" c="dimmed">Tip: Press Enter to submit, Esc to cancel</Text>
+
+        <Group justify="flex-end">
+          <Button variant="subtle" onClick={onClose}>Cancel</Button>
+          <Button onClick={handleSubmit}>Add Transaction</Button>
+        </Group>
+      </Stack>
     </Modal>
   )
 }
