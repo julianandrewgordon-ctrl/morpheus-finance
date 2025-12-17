@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { Container, Paper, Title, Text, Tabs, TextInput, PasswordInput, Button, Stack, Alert, Group, SimpleGrid, Box, Center } from '@mantine/core'
 import { supabase } from '../lib/supabase'
 
@@ -6,11 +6,26 @@ export default function LandingPage({ onEnter }) {
   const [isAnimating, setIsAnimating] = useState(false)
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
+  const [confirmPassword, setConfirmPassword] = useState('')
   const [error, setError] = useState('')
   const [success, setSuccess] = useState('')
   const [isLoading, setIsLoading] = useState(false)
   const [activeTab, setActiveTab] = useState('signin')
   const [showResetForm, setShowResetForm] = useState(false)
+  const [showNewPasswordForm, setShowNewPasswordForm] = useState(false)
+
+  // Check for password reset token in URL on mount
+  useEffect(() => {
+    const hashParams = new URLSearchParams(window.location.hash.substring(1))
+    const accessToken = hashParams.get('access_token')
+    const type = hashParams.get('type')
+    
+    if (accessToken && type === 'recovery') {
+      setShowNewPasswordForm(true)
+      // Clear the hash from URL
+      window.history.replaceState(null, '', window.location.pathname)
+    }
+  }, [])
 
   const handleSignIn = async () => {
     setError('')
@@ -81,6 +96,43 @@ export default function LandingPage({ onEnter }) {
       setShowResetForm(false)
     } catch (error) {
       setError(error.message || 'Failed to send reset email')
+    } finally {
+      setIsLoading(false)
+    }
+  }
+
+  const handleSetNewPassword = async () => {
+    setError('')
+    setSuccess('')
+    
+    if (!password) {
+      setError('Please enter a new password')
+      return
+    }
+    
+    if (password.length < 6) {
+      setError('Password must be at least 6 characters')
+      return
+    }
+    
+    if (password !== confirmPassword) {
+      setError('Passwords do not match')
+      return
+    }
+    
+    setIsLoading(true)
+    
+    try {
+      const { error } = await supabase.auth.updateUser({ password })
+      
+      if (error) throw error
+      
+      setSuccess('Password updated successfully! You can now sign in.')
+      setShowNewPasswordForm(false)
+      setPassword('')
+      setConfirmPassword('')
+    } catch (error) {
+      setError(error.message || 'Failed to update password')
     } finally {
       setIsLoading(false)
     }
@@ -202,6 +254,54 @@ export default function LandingPage({ onEnter }) {
                     </Alert>
                   )}
                   
+                  {showNewPasswordForm ? (
+                    <Stack gap="md">
+                      <Title order={3} c="grape.2" ta="center">Set New Password</Title>
+                      <Text c="grape.4" size="sm" ta="center">
+                        Enter your new password below.
+                      </Text>
+                      
+                      <PasswordInput
+                        label={<Text c="grape.2">New Password</Text>}
+                        description="Minimum 6 characters"
+                        value={password}
+                        onChange={(e) => setPassword(e.target.value)}
+                        placeholder="Enter new password"
+                        disabled={isLoading}
+                      />
+                      
+                      <PasswordInput
+                        label={<Text c="grape.2">Confirm Password</Text>}
+                        value={confirmPassword}
+                        onChange={(e) => setConfirmPassword(e.target.value)}
+                        placeholder="Confirm new password"
+                        onKeyPress={(e) => e.key === 'Enter' && handleSetNewPassword()}
+                        disabled={isLoading}
+                      />
+                      
+                      <Stack gap="xs">
+                        <Button
+                          fullWidth
+                          loading={isLoading}
+                          onClick={handleSetNewPassword}
+                        >
+                          Update Password
+                        </Button>
+                        <Button
+                          variant="subtle"
+                          onClick={() => {
+                            setShowNewPasswordForm(false)
+                            setPassword('')
+                            setConfirmPassword('')
+                            setError('')
+                          }}
+                          disabled={isLoading}
+                        >
+                          Cancel
+                        </Button>
+                      </Stack>
+                    </Stack>
+                  ) : (
                   <Tabs value={activeTab} onChange={(v) => { setActiveTab(v); setError(''); setSuccess(''); }}>
                     <Tabs.List grow>
                       <Tabs.Tab value="signin">Sign In</Tabs.Tab>
@@ -323,6 +423,7 @@ export default function LandingPage({ onEnter }) {
                       </Stack>
                     </Tabs.Panel>
                   </Tabs>
+                  )}
                 </Stack>
               </Box>
             </Stack>
