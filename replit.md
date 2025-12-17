@@ -78,6 +78,14 @@ Located in `src/utils/cashFlowCalculator.js`:
 
 ## Recent Changes
 
+### December 17, 2025 - Household Sharing Feature
+- Added multi-user household sharing for couples, families, or business partners
+- Database schema for households, members, and email invitations (`supabase-household-schema.sql`)
+- Role-based access control: owner, editor, viewer permissions
+- HouseholdSettings component for managing members and sending invites
+- Backward compatibility: Falls back to legacy single-user mode if household tables not set up
+- Invitation system with email-based joining and pending invite management
+
 ### December 17, 2025 - Chart Start Date Selector
 - Added date picker to Running Balance Chart for user-selectable start date
 - Chart now displays projections starting from the selected date
