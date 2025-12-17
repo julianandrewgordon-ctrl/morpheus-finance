@@ -78,6 +78,17 @@ Located in `src/utils/cashFlowCalculator.js`:
 
 ## Recent Changes
 
+### December 17, 2025 - Chart Start Date Selector
+- Added date picker to Running Balance Chart for user-selectable start date
+- Chart now displays projections starting from the selected date
+- Both chart and cash flow table use the same start date for consistency
+
+### December 17, 2025 - Payment Schedule UI
+- Added "Use Payment Schedule" toggle in Edit Rule modal
+- Phase editor with add/edit/delete functionality for multi-phase payment rules
+- Amount field hidden when payment schedule is enabled
+- Fixed NaN bug when saving rules with payment schedules (now averages phase amounts)
+
 ### December 17, 2025 - Mantine UI Migration
 - Migrated from Cloudscape Design System to Mantine UI
 - Resolved React duplication issue that caused production build crash (white screen)

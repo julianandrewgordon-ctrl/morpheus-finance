@@ -285,10 +285,25 @@ export default function Dashboard({
         </Paper>
 
         <Paper p="md" withBorder>
-          <Title order={3} mb="md">Running Balance Chart</Title>
+          <Group justify="space-between" mb="md">
+            <Title order={3}>Running Balance Chart</Title>
+            <Group>
+              <Text size="sm" c="dimmed">Start Date:</Text>
+              <DateInput
+                value={cashFlowStartDate ? new Date(cashFlowStartDate) : new Date()}
+                onChange={(date) => {
+                  if (date && onStartDateChange) {
+                    onStartDateChange(date.toISOString().split('T')[0])
+                  }
+                }}
+                size="sm"
+                style={{ width: 150 }}
+              />
+            </Group>
+          </Group>
           <BalanceChart 
             cashFlowData={cashFlowData} 
-            startingBalanceDate={data.startingBalanceDate || cashFlowStartDate}
+            startingBalanceDate={cashFlowStartDate}
             scenarioCashFlows={scenarioCashFlows}
             scenarios={scenarios}
             selectedScenario={selectedScenario}
