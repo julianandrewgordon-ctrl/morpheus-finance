@@ -1,0 +1,68 @@
+Perfect! Now I have a comprehensive understanding of the Payment Schedule functionality. Here's a summary of the coding that enabled this feature:
+
+Payment Schedule Functionality Summary
+The Payment Schedule feature allows rules to have multiple phases with different amounts and date ranges, replacing the single amount/date approach. Here's how it was implemented:
+
+1. Data Structure Enhancement
+Added paymentSchedule array to rule objects
+Each phase contains: id, amount, startDate, endDate, description
+Added usePaymentSchedule boolean flag for UI toggle
+2. Core Calculation Logic (src/utils/cashFlowCalculator.js)
+Phase Detection & Amount Calculation:
+
+// Check if rule has payment schedule
+if (rule.paymentSchedule && rule.paymentSchedule.length > 0) {
+  // Find which phase is active for this specific date
+  const activePhase = rule.paymentSchedule.find(phase => {
+    const phaseStart = new Date(phase.startDate + 'T00:00:00')
+    const phaseEnd = phase.endDate ? new Date(phase.endDate + 'T00:00:00') : null
+    return date >= phaseStart && (!phaseEnd || date <= phaseEnd)
+  })
+  
+  if (!activePhase) return // No active phase for this date
+  amount = parseFloat(activePhase.amount)
+}
+Date Range Calculation:
+
+Finds earliest phase start date as rule's effective date
+Handles phases with no end date (infinite duration)
+Calculates overall rule end date from latest phase
+3. UI Implementation (src/components/RecurringRules.jsx)
+Toggle Interface:
+
+Added "Use Payment Schedule" toggle that switches between single amount and multi-phase modes
+Hides standard Amount/Date fields when payment schedule is enabled
+Phase Management:
+
+Dynamic form for adding/editing/deleting phases
+Each phase has: Amount, Description, Start Date, End Date fields
+Automatic sign correction (expenses negative, income positive) applied to all phases
+Visual Indicators:
+
+Rules with payment schedules show "{X} Phases" badge in the table
+Amount column shows average of all phases with "Avg {X}ph" indicator
+4. Tooltip Enhancement
+Phase Information Display:
+
+
+// Find active phase info for tooltip
+let phaseInfo = null
+if (rule.paymentSchedule && rule.paymentSchedule.length > 0) {
+  const activePhase = rule.paymentSchedule.find(/* phase matching logic */)
+  if (activePhase) {
+    phaseInfo = {
+      description: activePhase.description,
+      phaseNumber: rule.paymentSchedule.indexOf(activePhase) + 1,
+      totalPhases: rule.paymentSchedule.length
+    }
+  }
+}
+5. Key Features Enabled
+Multi-phase payments: Different amounts for different time periods
+Graduated payments: Loan payments that increase over time
+Seasonal income: Different amounts for peak/off-season
+Promotional pricing: Intro rates followed by regular rates
+Visual feedback: Phase badges and tooltips showing active phase
+Backward compatibility: Existing single-amount rules continue working
+The implementation elegantly handles the complexity of time-based amount changes while maintaining a clean UI and preserving existing functionality.
+
