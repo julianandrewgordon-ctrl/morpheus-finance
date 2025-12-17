@@ -9,11 +9,13 @@ export default defineConfig({
   // 1. Allow Replit to serve the file
   server: {
     allowedHosts: true,
-    host: true,
+    host: '0.0.0.0',
+    port: 5000,
   },
   preview: {
     allowedHosts: true,
-    host: true,
+    host: '0.0.0.0',
+    port: 5000,
   },
 
   // 2. Hardcode the keys directly into the build

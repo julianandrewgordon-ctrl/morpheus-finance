@@ -114,7 +114,18 @@ export default function RecurringRules({
 
   const handleSaveEdit = () => {
     if (editingRule) {
-      let amount = parseFloat(editForm.amount)
+      let amount = 0
+      
+      if (editForm.usePaymentSchedule && editForm.paymentSchedule.length > 0) {
+        const validAmounts = editForm.paymentSchedule
+          .map(p => parseFloat(p.amount))
+          .filter(a => !isNaN(a))
+        amount = validAmounts.length > 0 
+          ? validAmounts.reduce((sum, a) => sum + a, 0) / validAmounts.length 
+          : editingRule.amount || 0
+      } else {
+        amount = parseFloat(editForm.amount) || 0
+      }
       
       const isExpenseType = editForm.type !== 'Income'
       if (isExpenseType && amount > 0) {
@@ -420,12 +431,6 @@ export default function RecurringRules({
             value={editForm.name}
             onChange={(e) => setEditForm(prev => ({ ...prev, name: e.target.value }))}
           />
-          <TextInput
-            label="Amount"
-            type="number"
-            value={editForm.amount}
-            onChange={(e) => setEditForm(prev => ({ ...prev, amount: e.target.value }))}
-          />
           <Select
             label="Type"
             value={editForm.type}
@@ -449,28 +454,155 @@ export default function RecurringRules({
               { value: 'Monthly', label: 'Monthly' }
             ]}
           />
-          {editForm.frequency !== 'One-time' && (
-            <TextInput
-              label="Effective Date"
-              type="date"
-              value={editForm.effectiveDate}
-              onChange={(e) => setEditForm(prev => ({ ...prev, effectiveDate: e.target.value }))}
-            />
-          )}
-          {editForm.frequency === 'One-time' && (
-            <TextInput
-              label="Impact Date"
-              type="date"
-              value={editForm.impactDate}
-              onChange={(e) => setEditForm(prev => ({ ...prev, impactDate: e.target.value }))}
-            />
-          )}
-          <TextInput
-            label="End Date"
-            type="date"
-            value={editForm.endDate}
-            onChange={(e) => setEditForm(prev => ({ ...prev, endDate: e.target.value }))}
+
+          <Switch
+            label="Use Payment Schedule"
+            description="Enable multi-phase payments with different amounts over time"
+            checked={editForm.usePaymentSchedule}
+            onChange={(e) => setEditForm(prev => ({ ...prev, usePaymentSchedule: e.currentTarget.checked }))}
           />
+
+          {!editForm.usePaymentSchedule ? (
+            <>
+              <TextInput
+                label="Amount"
+                type="number"
+                value={editForm.amount}
+                onChange={(e) => setEditForm(prev => ({ ...prev, amount: e.target.value }))}
+              />
+              {editForm.frequency !== 'One-time' && (
+                <TextInput
+                  label="Effective Date"
+                  type="date"
+                  value={editForm.effectiveDate}
+                  onChange={(e) => setEditForm(prev => ({ ...prev, effectiveDate: e.target.value }))}
+                />
+              )}
+              {editForm.frequency === 'One-time' && (
+                <TextInput
+                  label="Impact Date"
+                  type="date"
+                  value={editForm.impactDate}
+                  onChange={(e) => setEditForm(prev => ({ ...prev, impactDate: e.target.value }))}
+                />
+              )}
+              <TextInput
+                label="End Date"
+                type="date"
+                value={editForm.endDate}
+                onChange={(e) => setEditForm(prev => ({ ...prev, endDate: e.target.value }))}
+              />
+            </>
+          ) : (
+            <Paper p="md" withBorder>
+              <Stack gap="md">
+                <Group justify="space-between">
+                  <Text fw={600}>Payment Phases</Text>
+                  <Button 
+                    size="xs" 
+                    onClick={() => {
+                      const newPhase = {
+                        id: Date.now(),
+                        amount: '',
+                        startDate: '',
+                        endDate: '',
+                        description: ''
+                      }
+                      setEditForm(prev => ({
+                        ...prev,
+                        paymentSchedule: [...prev.paymentSchedule, newPhase]
+                      }))
+                    }}
+                  >
+                    + Add Phase
+                  </Button>
+                </Group>
+
+                {editForm.paymentSchedule.length === 0 && (
+                  <Text c="dimmed" size="sm" ta="center">No phases added. Click "Add Phase" to create one.</Text>
+                )}
+
+                {editForm.paymentSchedule.map((phase, index) => (
+                  <Paper key={phase.id || index} p="sm" withBorder bg="gray.0">
+                    <Stack gap="xs">
+                      <Group justify="space-between">
+                        <Text size="sm" fw={500}>Phase {index + 1}</Text>
+                        <Button 
+                          size="xs" 
+                          color="red" 
+                          variant="subtle"
+                          onClick={() => {
+                            setEditForm(prev => ({
+                              ...prev,
+                              paymentSchedule: prev.paymentSchedule.filter((_, i) => i !== index)
+                            }))
+                          }}
+                        >
+                          Remove
+                        </Button>
+                      </Group>
+                      <Group grow>
+                        <TextInput
+                          label="Amount"
+                          type="number"
+                          size="xs"
+                          value={phase.amount}
+                          onChange={(e) => {
+                            const updated = [...editForm.paymentSchedule]
+                            updated[index] = { ...updated[index], amount: e.target.value }
+                            setEditForm(prev => ({ ...prev, paymentSchedule: updated }))
+                          }}
+                          placeholder="e.g., 500"
+                        />
+                        <TextInput
+                          label="Description"
+                          size="xs"
+                          value={phase.description || ''}
+                          onChange={(e) => {
+                            const updated = [...editForm.paymentSchedule]
+                            updated[index] = { ...updated[index], description: e.target.value }
+                            setEditForm(prev => ({ ...prev, paymentSchedule: updated }))
+                          }}
+                          placeholder="e.g., Intro rate"
+                        />
+                      </Group>
+                      <Group grow>
+                        <TextInput
+                          label="Start Date"
+                          type="date"
+                          size="xs"
+                          value={phase.startDate || ''}
+                          onChange={(e) => {
+                            const updated = [...editForm.paymentSchedule]
+                            updated[index] = { ...updated[index], startDate: e.target.value }
+                            setEditForm(prev => ({ ...prev, paymentSchedule: updated }))
+                          }}
+                        />
+                        <TextInput
+                          label="End Date"
+                          type="date"
+                          size="xs"
+                          value={phase.endDate || ''}
+                          onChange={(e) => {
+                            const updated = [...editForm.paymentSchedule]
+                            updated[index] = { ...updated[index], endDate: e.target.value }
+                            setEditForm(prev => ({ ...prev, paymentSchedule: updated }))
+                          }}
+                        />
+                      </Group>
+                    </Stack>
+                  </Paper>
+                ))}
+
+                {editForm.paymentSchedule.length > 0 && (
+                  <Text size="xs" c="dimmed">
+                    Tip: Leave End Date empty for ongoing phases. Phases should not overlap.
+                  </Text>
+                )}
+              </Stack>
+            </Paper>
+          )}
+
           <Textarea
             label="Description"
             value={editForm.description}
