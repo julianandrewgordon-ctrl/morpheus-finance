@@ -164,17 +164,37 @@ function App() {
     
     const saveData = async () => {
       try {
+        console.log('Saving data for household:', currentHouseholdId, 'rules count:', data.recurringRules?.length)
         if (currentHouseholdId === 'legacy') {
-          await supabase
+          // Legacy mode: check if row exists, then update or insert
+          const { data: existing } = await supabase
             .from('financial_data')
-            .upsert({
-              user_id: user.id,
-              data: data
-            }, {
-              onConflict: 'user_id'
-            })
+            .select('id')
+            .eq('user_id', user.id)
+            .maybeSingle()
+          
+          let error
+          if (existing) {
+            const result = await supabase
+              .from('financial_data')
+              .update({ data: data })
+              .eq('user_id', user.id)
+            error = result.error
+          } else {
+            const result = await supabase
+              .from('financial_data')
+              .insert({ user_id: user.id, data: data })
+            error = result.error
+          }
+          
+          if (error) {
+            console.error('Error saving legacy data:', error)
+          } else {
+            console.log('Legacy data saved successfully')
+          }
         } else {
           await saveFinancialDataByHousehold(currentHouseholdId, data)
+          console.log('Household data saved successfully')
         }
       } catch (error) {
         console.error('Error saving data:', error)

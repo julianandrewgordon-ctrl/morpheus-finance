@@ -213,44 +213,89 @@ export async function updateHouseholdName(householdId, name) {
 }
 
 export async function getFinancialDataByHousehold(householdId) {
+  // Use array query and take first result to handle potential duplicates safely
   const { data, error } = await supabase
     .from('financial_data')
     .select('*')
     .eq('household_id', householdId)
-    .single()
+    .order('updated_at', { ascending: false })
+    .limit(1)
   
-  if (error && error.code !== 'PGRST116') throw error
-  return data
+  if (error) throw error
+  return data && data.length > 0 ? data[0] : null
 }
 
 export async function saveFinancialDataByHousehold(householdId, financialData) {
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) throw new Error('Not authenticated')
   
-  const { data: existing } = await supabase
+  console.log('saveFinancialDataByHousehold called for household:', householdId)
+  
+  // First try to find existing row by household_id (use array query to handle duplicates)
+  const { data: existingRows, error: fetchError } = await supabase
     .from('financial_data')
     .select('id')
     .eq('household_id', householdId)
-    .single()
+    .limit(1)
   
-  if (existing) {
+  if (fetchError) {
+    console.error('Error fetching by household_id:', fetchError)
+    throw fetchError
+  }
+  
+  if (existingRows && existingRows.length > 0) {
+    // Row exists with this household_id, just update it
+    console.log('Found existing row by household_id, updating...')
     const { error } = await supabase
       .from('financial_data')
       .update({ data: financialData })
-      .eq('household_id', householdId)
+      .eq('id', existingRows[0].id)
     
     if (error) throw error
-  } else {
-    const { error } = await supabase
-      .from('financial_data')
-      .insert({
-        household_id: householdId,
-        user_id: user.id,
-        data: financialData
-      })
-    
-    if (error) throw error
+    return
   }
+  
+  // Check if there's a legacy row for this user without household_id
+  // Order by updated_at DESC to get the most recent data first
+  const { data: legacyRows, error: legacyError } = await supabase
+    .from('financial_data')
+    .select('id')
+    .eq('user_id', user.id)
+    .is('household_id', null)
+    .order('updated_at', { ascending: false })
+    .limit(1)
+  
+  if (legacyError) {
+    console.error('Error fetching legacy row:', legacyError)
+    throw legacyError
+  }
+  
+  if (legacyRows && legacyRows.length > 0) {
+    // Migrate the legacy row: add household_id and update data
+    console.log('Found legacy row, migrating to household...')
+    const { error: updateError } = await supabase
+      .from('financial_data')
+      .update({ 
+        data: financialData,
+        household_id: householdId 
+      })
+      .eq('id', legacyRows[0].id)
+    
+    if (updateError) throw updateError
+    return
+  }
+  
+  // No existing row for this household, insert new one
+  console.log('No existing row found, inserting new row...')
+  const { error } = await supabase
+    .from('financial_data')
+    .insert({
+      household_id: householdId,
+      user_id: user.id,
+      data: financialData
+    })
+  
+  if (error) throw error
 }
 
 export function getUserRole(householdMembers, userId) {

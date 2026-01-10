@@ -78,6 +78,13 @@ Located in `src/utils/cashFlowCalculator.js`:
 
 ## Recent Changes
 
+### January 10, 2026 - Fix New Rule Save Issue
+- Fixed bug where new rules weren't saving in production
+- Root cause: UNIQUE(user_id) constraint on financial_data conflicted with household mode
+- Updated saveFinancialDataByHousehold to detect and migrate legacy rows
+- Added `supabase-fix-unique-constraint.sql` migration for existing deployments
+- Added console logging for save operations to aid debugging
+
 ### December 17, 2025 - Household Sharing Feature
 - Added multi-user household sharing for couples, families, or business partners
 - Database schema for households, members, and email invitations (`supabase-household-schema.sql`)
