@@ -230,6 +230,10 @@ DROP POLICY IF EXISTS "Users can view own financial data" ON public.financial_da
 DROP POLICY IF EXISTS "Users can insert own financial data" ON public.financial_data;
 DROP POLICY IF EXISTS "Users can update own financial data" ON public.financial_data;
 DROP POLICY IF EXISTS "Users can delete own financial data" ON public.financial_data;
+DROP POLICY IF EXISTS "Members can view household financial data" ON public.financial_data;
+DROP POLICY IF EXISTS "Members can insert household financial data" ON public.financial_data;
+DROP POLICY IF EXISTS "Members can update household financial data" ON public.financial_data;
+DROP POLICY IF EXISTS "Owners and editors can delete household financial data" ON public.financial_data;
 
 CREATE POLICY "Members can view household financial data"
   ON public.financial_data FOR SELECT
