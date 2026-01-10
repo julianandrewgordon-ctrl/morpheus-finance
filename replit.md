@@ -81,9 +81,15 @@ Located in `src/utils/cashFlowCalculator.js`:
 ### January 10, 2026 - Fix New Rule Save Issue
 - Fixed bug where new rules weren't saving in production
 - Root cause: UNIQUE(user_id) constraint on financial_data conflicted with household mode
-- Updated saveFinancialDataByHousehold to detect and migrate legacy rows
+- Updated saveFinancialDataByHousehold to use array queries with .limit(1) to safely handle duplicates
+- Updated getFinancialDataByHousehold to use array query pattern for consistency
 - Added `supabase-fix-unique-constraint.sql` migration for existing deployments
+  - Drops UNIQUE(user_id) constraint
+  - Backfills legacy rows with household_id
+  - Adds partial unique index for legacy mode (user_id WHERE household_id IS NULL)
+  - Adds UNIQUE(household_id) constraint
 - Added console logging for save operations to aid debugging
+- **REQUIRED**: Run supabase-fix-unique-constraint.sql in production to apply changes
 
 ### December 17, 2025 - Household Sharing Feature
 - Added multi-user household sharing for couples, families, or business partners
