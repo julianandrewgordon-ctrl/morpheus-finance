@@ -290,11 +290,13 @@ CREATE POLICY "Owners and editors can delete household financial data"
 -- TRIGGERS FOR updated_at
 -- ===========================================
 
+DROP TRIGGER IF EXISTS set_updated_at_households ON public.households;
 CREATE TRIGGER set_updated_at_households
   BEFORE UPDATE ON public.households
   FOR EACH ROW
   EXECUTE FUNCTION public.handle_updated_at();
 
+DROP TRIGGER IF EXISTS set_updated_at_household_members ON public.household_members;
 CREATE TRIGGER set_updated_at_household_members
   BEFORE UPDATE ON public.household_members
   FOR EACH ROW
