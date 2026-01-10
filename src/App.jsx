@@ -36,6 +36,8 @@ function App() {
   const [cashFlowStartDate, setCashFlowStartDate] = useState('2025-11-20')
   const [hideEmptyRows, setHideEmptyRows] = useState(false)
   const [householdLoading, setHouseholdLoading] = useState(false)
+  const [hasPendingEdits, setHasPendingEdits] = useState(false)
+  const [dataVersion, setDataVersion] = useState(0)
   
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
@@ -113,6 +115,14 @@ function App() {
   useEffect(() => {
     if (!user || !currentHouseholdId) return
     
+    // Skip loading if user has pending edits - don't overwrite their changes
+    if (hasPendingEdits) {
+      console.log('Skipping data load - pending edits exist')
+      return
+    }
+    
+    const loadVersion = dataVersion
+    
     const loadHouseholdData = async () => {
       setHouseholdLoading(true)
       try {
@@ -126,10 +136,17 @@ function App() {
           if (dataError && dataError.code !== 'PGRST116') {
             console.error('Error loading financial data:', dataError)
           } else if (financialData) {
-            const migratedData = migrateDataIfNeeded(financialData.data)
-            setData(migratedData)
+            // Only update if no new edits happened during load
+            if (loadVersion === dataVersion && !hasPendingEdits) {
+              const migratedData = migrateDataIfNeeded(financialData.data)
+              setData(migratedData)
+            } else {
+              console.log('Skipping stale data load - edits occurred during fetch')
+            }
           } else {
-            setData(getBlankData())
+            if (loadVersion === dataVersion && !hasPendingEdits) {
+              setData(getBlankData())
+            }
           }
         } else {
           localStorage.setItem(`morpheus_household_${user.id}`, currentHouseholdId)
@@ -137,20 +154,29 @@ function App() {
           const financialData = await getFinancialDataByHousehold(currentHouseholdId)
           
           if (financialData) {
-            const migratedData = migrateDataIfNeeded(financialData.data)
-            setData(migratedData)
-            
-            if (migratedData !== financialData.data) {
-              console.log('Data migrated, saving to database...')
-              await saveFinancialDataByHousehold(currentHouseholdId, migratedData)
+            // Only update if no new edits happened during load
+            if (loadVersion === dataVersion && !hasPendingEdits) {
+              const migratedData = migrateDataIfNeeded(financialData.data)
+              setData(migratedData)
+              
+              if (migratedData !== financialData.data) {
+                console.log('Data migrated, saving to database...')
+                await saveFinancialDataByHousehold(currentHouseholdId, migratedData)
+              }
+            } else {
+              console.log('Skipping stale data load - edits occurred during fetch')
             }
           } else {
-            setData(getBlankData())
+            if (loadVersion === dataVersion && !hasPendingEdits) {
+              setData(getBlankData())
+            }
           }
         }
       } catch (error) {
         console.error('Error loading household data:', error)
-        setData(getBlankData())
+        if (loadVersion === dataVersion && !hasPendingEdits) {
+          setData(getBlankData())
+        }
       } finally {
         setHouseholdLoading(false)
       }
@@ -161,6 +187,9 @@ function App() {
   
   useEffect(() => {
     if (!user || !currentHouseholdId || householdLoading) return
+    
+    // Skip initial save if no pending edits (data just loaded from DB)
+    if (!hasPendingEdits) return
     
     const saveData = async () => {
       try {
@@ -191,10 +220,14 @@ function App() {
             console.error('Error saving legacy data:', error)
           } else {
             console.log('Legacy data saved successfully')
+            setHasPendingEdits(false)
+            setDataVersion(v => v + 1)
           }
         } else {
           await saveFinancialDataByHousehold(currentHouseholdId, data)
           console.log('Household data saved successfully')
+          setHasPendingEdits(false)
+          setDataVersion(v => v + 1)
         }
       } catch (error) {
         console.error('Error saving data:', error)
@@ -203,7 +236,7 @@ function App() {
     
     const timeoutId = setTimeout(saveData, 1000)
     return () => clearTimeout(timeoutId)
-  }, [data, user, currentHouseholdId, householdLoading])
+  }, [data, user, currentHouseholdId, householdLoading, hasPendingEdits])
   
   useEffect(() => {
     if (!user) return
@@ -233,6 +266,7 @@ function App() {
   }, [cashFlowStartDate, hideEmptyRows, user])
 
   const handleAddTransaction = (transaction) => {
+    setHasPendingEdits(true)
     setData(prev => ({
       ...prev,
       recurringRules: [...prev.recurringRules, { 
@@ -245,6 +279,7 @@ function App() {
   }
 
   const handleBatchAddRules = (rules) => {
+    setHasPendingEdits(true)
     setData(prev => ({
       ...prev,
       recurringRules: [...prev.recurringRules, ...rules.map(rule => ({ ...rule, id: Date.now() + Math.random() }))]
@@ -252,6 +287,7 @@ function App() {
   }
 
   const handleDeleteRule = (ruleId) => {
+    setHasPendingEdits(true)
     setData(prev => ({
       ...prev,
       recurringRules: prev.recurringRules.filter(rule => rule.id !== ruleId)
@@ -259,6 +295,7 @@ function App() {
   }
 
   const handleToggleInclude = (ruleId) => {
+    setHasPendingEdits(true)
     setData(prev => ({
       ...prev,
       recurringRules: prev.recurringRules.map(rule => 
@@ -268,6 +305,7 @@ function App() {
   }
 
   const handleUpdateRule = (ruleId, updates) => {
+    setHasPendingEdits(true)
     setData(prev => ({
       ...prev,
       recurringRules: prev.recurringRules.map(rule => 
@@ -277,6 +315,7 @@ function App() {
   }
 
   const handleAddScenario = (scenario) => {
+    setHasPendingEdits(true)
     setData(prev => ({
       ...prev,
       scenarios: [...prev.scenarios, { ...scenario, id: Date.now() }]
@@ -284,6 +323,7 @@ function App() {
   }
 
   const handleUpdateScenario = (scenarioId, updates) => {
+    setHasPendingEdits(true)
     setData(prev => ({
       ...prev,
       scenarios: prev.scenarios.map(scenario => 
@@ -293,6 +333,7 @@ function App() {
   }
 
   const handleDeleteScenario = (scenarioId) => {
+    setHasPendingEdits(true)
     setData(prev => ({
       ...prev,
       scenarios: prev.scenarios.filter(scenario => scenario.id !== scenarioId),
@@ -311,6 +352,7 @@ function App() {
   }
 
   const handleUpdateStartingBalance = (balance, date) => {
+    setHasPendingEdits(true)
     setData(prev => ({
       ...prev,
       startingBalance: balance,
@@ -319,6 +361,7 @@ function App() {
   }
 
   const handleAddHistoricalCashFlow = (cashFlow) => {
+    setHasPendingEdits(true)
     setData(prev => ({
       ...prev,
       historicalCashFlows: [...prev.historicalCashFlows, { ...cashFlow, id: Date.now() }]
@@ -326,6 +369,7 @@ function App() {
   }
 
   const handleBatchAddHistoricalCashFlows = (cashFlows) => {
+    setHasPendingEdits(true)
     setData(prev => ({
       ...prev,
       historicalCashFlows: [...prev.historicalCashFlows, ...cashFlows.map(cf => ({ ...cf, id: Date.now() + Math.random() }))]
@@ -333,6 +377,7 @@ function App() {
   }
 
   const handleDeleteHistoricalCashFlow = (id) => {
+    setHasPendingEdits(true)
     setData(prev => ({
       ...prev,
       historicalCashFlows: prev.historicalCashFlows.filter(cf => cf.id !== id)
@@ -374,10 +419,12 @@ function App() {
   }
 
   const handleImportData = (importedData) => {
+    setHasPendingEdits(true)
     setData(importedData)
   }
 
   const handleAddOverride = (baseRuleId, scenarioId, overrideValues) => {
+    setHasPendingEdits(true)
     const newOverride = {
       id: Date.now() + Math.random(),
       baseRuleId,
@@ -392,6 +439,7 @@ function App() {
   }
 
   const handleUpdateOverride = (overrideId, newValues) => {
+    setHasPendingEdits(true)
     setData(prev => ({
       ...prev,
       ruleOverrides: (prev.ruleOverrides || []).map(override =>
@@ -403,6 +451,7 @@ function App() {
   }
 
   const handleRemoveOverride = (overrideId) => {
+    setHasPendingEdits(true)
     setData(prev => ({
       ...prev,
       ruleOverrides: (prev.ruleOverrides || []).filter(o => o.id !== overrideId)
