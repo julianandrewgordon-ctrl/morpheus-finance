@@ -39,6 +39,7 @@ function App() {
   const [hasPendingEdits, setHasPendingEdits] = useState(false)
   const hasPendingEditsRef = useRef(false)
   const pendingEditsRef = useRef([])
+  const initialLoadCompleteRef = useRef(false)
   
   // Helper to update both state and ref for pending edits flag
   const markPendingEdits = (value) => {
