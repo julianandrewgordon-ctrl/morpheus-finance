@@ -37,6 +37,7 @@ function App() {
   const [hideEmptyRows, setHideEmptyRows] = useState(false)
   const [householdLoading, setHouseholdLoading] = useState(false)
   const [hasPendingEdits, setHasPendingEdits] = useState(false)
+  const [saveError, setSaveError] = useState(null)
   const hasPendingEditsRef = useRef(false)
   const pendingEditsRef = useRef([])
   const initialLoadCompleteRef = useRef(false)
@@ -220,15 +221,14 @@ function App() {
     
     const saveData = async () => {
       try {
-        console.log('Saving data for household:', currentHouseholdId, 'rules count:', data.recurringRules?.length)
+        setSaveError(null)
         if (currentHouseholdId === 'legacy') {
-          // Legacy mode: check if row exists, then update or insert
           const { data: existing } = await supabase
             .from('financial_data')
             .select('id')
             .eq('user_id', user.id)
             .maybeSingle()
-          
+
           let error
           if (existing) {
             const result = await supabase
@@ -242,20 +242,20 @@ function App() {
               .insert({ user_id: user.id, data: data })
             error = result.error
           }
-          
+
           if (error) {
             console.error('Error saving legacy data:', error)
+            setSaveError('Failed to save data: ' + error.message)
           } else {
-            console.log('Legacy data saved successfully')
             markPendingEdits(false)
           }
         } else {
           await saveFinancialDataByHousehold(currentHouseholdId, data)
-          console.log('Household data saved successfully')
           markPendingEdits(false)
         }
       } catch (error) {
         console.error('Error saving data:', error)
+        setSaveError('Failed to save data: ' + (error.message || 'Unknown error'))
       }
     }
     
@@ -661,6 +661,11 @@ function App() {
         </AppShell.Navbar>
 
         <AppShell.Main>
+          {saveError && (
+            <Alert color="red" title="Save Failed" mb="md" withCloseButton onClose={() => setSaveError(null)}>
+              {saveError}. Your changes may not be saved. Please try again.
+            </Alert>
+          )}
           {getContent()}
         </AppShell.Main>
       </AppShell>
