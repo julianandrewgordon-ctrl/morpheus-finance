@@ -140,34 +140,54 @@ export function calculateCashFlowTable(rules, startingBalance, startingBalanceDa
       
       // For payment schedule or recurring rules
       if (rule.frequency !== 'One-time' && effectiveDate) {
-        
-        // Check if date is within rule's active period
-        // Must be on or after effective date
-        // Must be on or before end date (if end date exists)
-        // Must be on or after starting balance date (for display)
-        if (date >= effectiveDate && (!endDate || date <= endDate) && date >= balanceDate) {
-          // Calculate frequency from ORIGINAL effective date (not adjusted)
-          const daysSinceEffective = Math.floor((date - effectiveDate) / (1000 * 60 * 60 * 24))
-          
-          if (rule.frequency === 'Monthly') {
-            // Monthly on the same day of month
-            if (date.getDate() === effectiveDate.getDate()) {
-              shouldInclude = true
+        const instanceOverrides = rule.instanceOverrides || []
+
+        // First, check if today IS an actualDate from an instance override
+        // This means a payment was moved TO this date
+        const overrideForToday = instanceOverrides.find(o => o.actualDate === dateStr)
+        if (overrideForToday) {
+          // A payment was moved to today - include it
+          shouldInclude = true
+        } else {
+          // Check if this would normally be a payment date
+          // Check if date is within rule's active period
+          if (date >= effectiveDate && (!endDate || date <= endDate) && date >= balanceDate) {
+            // Calculate frequency from ORIGINAL effective date
+            const daysSinceEffective = Math.floor((date - effectiveDate) / (1000 * 60 * 60 * 24))
+            let isScheduledDate = false
+
+            if (rule.frequency === 'Monthly') {
+              // Monthly on the same day of month as effective date
+              if (date.getDate() === effectiveDate.getDate()) {
+                isScheduledDate = true
+              }
+            } else if (rule.frequency === 'Bi-weekly') {
+              // Every 14 days from original effective date
+              if (daysSinceEffective % 14 === 0) {
+                isScheduledDate = true
+              }
+            } else if (rule.frequency === 'Weekly') {
+              // Every 7 days from original effective date
+              if (daysSinceEffective % 7 === 0) {
+                isScheduledDate = true
+              }
+            } else if (rule.intervalDays) {
+              // Custom interval from original effective date
+              if (daysSinceEffective % rule.intervalDays === 0) {
+                isScheduledDate = true
+              }
             }
-          } else if (rule.frequency === 'Bi-weekly') {
-            // Every 14 days from original effective date
-            if (daysSinceEffective % 14 === 0) {
-              shouldInclude = true
-            }
-          } else if (rule.frequency === 'Weekly') {
-            // Every 7 days from original effective date
-            if (daysSinceEffective % 7 === 0) {
-              shouldInclude = true
-            }
-          } else if (rule.intervalDays) {
-            // Custom interval from original effective date
-            if (daysSinceEffective % rule.intervalDays === 0) {
-              shouldInclude = true
+
+            // If this is a scheduled date, check if it's been moved elsewhere
+            if (isScheduledDate) {
+              const overrideMovingAway = instanceOverrides.find(o => o.scheduledDate === dateStr)
+              if (overrideMovingAway) {
+                // This payment was moved to a different date, don't include here
+                shouldInclude = false
+              } else {
+                // Normal scheduled date, no override - include it
+                shouldInclude = true
+              }
             }
           }
         }

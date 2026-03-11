@@ -302,3 +302,129 @@ export function getUserRole(householdMembers, userId) {
   const member = householdMembers?.find(m => m.user_id === userId)
   return member?.role || null
 }
+
+// ===========================================
+// PLAID INTEGRATION FUNCTIONS
+// ===========================================
+
+export async function createPlaidLinkToken(householdId) {
+  const { data: { session } } = await supabase.auth.getSession()
+  if (!session) throw new Error('Not authenticated')
+
+  const response = await fetch(`${supabaseUrl}/functions/v1/plaid-create-link-token`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${session.access_token}`,
+    },
+    body: JSON.stringify({ householdId }),
+  })
+
+  const result = await response.json()
+  if (!response.ok) {
+    throw new Error(result.error || 'Failed to create link token')
+  }
+
+  return result.link_token
+}
+
+export async function exchangePlaidToken(publicToken, householdId, metadata) {
+  const { data: { session } } = await supabase.auth.getSession()
+  if (!session) throw new Error('Not authenticated')
+
+  const response = await fetch(`${supabaseUrl}/functions/v1/plaid-exchange-token`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${session.access_token}`,
+    },
+    body: JSON.stringify({ publicToken, householdId, metadata }),
+  })
+
+  const result = await response.json()
+  if (!response.ok) {
+    throw new Error(result.error || 'Failed to exchange token')
+  }
+
+  return result
+}
+
+export async function refreshPlaidBalances(householdId) {
+  const { data: { session } } = await supabase.auth.getSession()
+  if (!session) throw new Error('Not authenticated')
+
+  const response = await fetch(`${supabaseUrl}/functions/v1/plaid-refresh-balances`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${session.access_token}`,
+    },
+    body: JSON.stringify({ householdId }),
+  })
+
+  const result = await response.json()
+  if (!response.ok) {
+    throw new Error(result.error || 'Failed to refresh balances')
+  }
+
+  return result
+}
+
+export async function getPlaidAccounts(householdId) {
+  const { data, error } = await supabase
+    .from('plaid_accounts')
+    .select(`
+      *,
+      plaid_items (
+        id,
+        institution_name,
+        status
+      )
+    `)
+    .eq('household_id', householdId)
+    .order('created_at', { ascending: true })
+
+  if (error) throw error
+  return data || []
+}
+
+export async function getPlaidItems(householdId) {
+  const { data, error } = await supabase
+    .from('plaid_items')
+    .select('id, institution_name, status, created_at')
+    .eq('household_id', householdId)
+    .order('created_at', { ascending: true })
+
+  if (error) throw error
+  return data || []
+}
+
+export async function disconnectPlaidItem(plaidItemId, householdId) {
+  const { data: { session } } = await supabase.auth.getSession()
+  if (!session) throw new Error('Not authenticated')
+
+  const response = await fetch(`${supabaseUrl}/functions/v1/plaid-disconnect-item`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${session.access_token}`,
+    },
+    body: JSON.stringify({ plaidItemId, householdId }),
+  })
+
+  const result = await response.json()
+  if (!response.ok) {
+    throw new Error(result.error || 'Failed to disconnect bank')
+  }
+
+  return result
+}
+
+export async function updatePlaidAccountInclude(accountId, includeInTotal) {
+  const { error } = await supabase
+    .from('plaid_accounts')
+    .update({ include_in_total: includeInTotal })
+    .eq('id', accountId)
+
+  if (error) throw error
+}

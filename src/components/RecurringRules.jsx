@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useMemo } from 'react'
 import { Table, Title, Text, Group, Button, Stack, TextInput, Select, Badge, Modal, Textarea, Notification, Paper, Menu, Checkbox, Radio, Switch, Box, MultiSelect } from '@mantine/core'
 import OverrideModal from './OverrideModal'
 import { hasOverride, getOverride } from '../utils/ruleOverrides'
@@ -42,8 +42,70 @@ export default function RecurringRules({
     endDate: '',
     description: '',
     usePaymentSchedule: false,
-    paymentSchedule: []
+    paymentSchedule: [],
+    instanceOverrides: []
   })
+
+  // Generate upcoming payment dates for the dropdown
+  const upcomingPaymentDates = useMemo(() => {
+    if (!editForm.effectiveDate || editForm.frequency === 'One-time') {
+      return []
+    }
+
+    const dates = []
+    const effectiveDate = new Date(editForm.effectiveDate + 'T00:00:00')
+    const endDate = editForm.endDate ? new Date(editForm.endDate + 'T00:00:00') : null
+    const today = new Date()
+    today.setHours(0, 0, 0, 0)
+
+    // Start from today or effective date, whichever is later
+    let currentDate = new Date(Math.max(effectiveDate.getTime(), today.getTime()))
+
+    // Generate next 12 payment dates
+    let count = 0
+    const maxIterations = 365 // Safety limit
+    let iterations = 0
+
+    while (count < 12 && iterations < maxIterations) {
+      iterations++
+
+      // Check if this date matches the payment schedule
+      let isPaymentDate = false
+
+      if (editForm.frequency === 'Monthly') {
+        if (currentDate.getDate() === effectiveDate.getDate()) {
+          isPaymentDate = true
+        }
+      } else if (editForm.frequency === 'Bi-weekly') {
+        const daysDiff = Math.floor((currentDate - effectiveDate) / (1000 * 60 * 60 * 24))
+        if (daysDiff >= 0 && daysDiff % 14 === 0) {
+          isPaymentDate = true
+        }
+      } else if (editForm.frequency === 'Weekly') {
+        const daysDiff = Math.floor((currentDate - effectiveDate) / (1000 * 60 * 60 * 24))
+        if (daysDiff >= 0 && daysDiff % 7 === 0) {
+          isPaymentDate = true
+        }
+      }
+
+      if (isPaymentDate && currentDate >= effectiveDate && (!endDate || currentDate <= endDate)) {
+        const dateStr = currentDate.toISOString().split('T')[0]
+        // Format for display: "Mar 15, 2026"
+        const displayDate = currentDate.toLocaleDateString('en-US', {
+          month: 'short',
+          day: 'numeric',
+          year: 'numeric'
+        })
+        dates.push({ value: dateStr, label: displayDate })
+        count++
+      }
+
+      // Move to next day
+      currentDate.setDate(currentDate.getDate() + 1)
+    }
+
+    return dates
+  }, [editForm.effectiveDate, editForm.frequency, editForm.endDate])
 
   const typeOptions = [
     { value: 'all', label: 'All Types' },
@@ -107,7 +169,8 @@ export default function RecurringRules({
       endDate: rule.endDate || '',
       description: rule.description || '',
       usePaymentSchedule: rule.paymentSchedule && rule.paymentSchedule.length > 0,
-      paymentSchedule: rule.paymentSchedule || []
+      paymentSchedule: rule.paymentSchedule || [],
+      instanceOverrides: rule.instanceOverrides || []
     })
     setShowEditModal(true)
   }
@@ -145,7 +208,8 @@ export default function RecurringRules({
         impactDate: editForm.frequency === 'One-time' ? editForm.impactDate : undefined,
         endDate: editForm.endDate || null,
         description: editForm.description,
-        paymentSchedule: editForm.usePaymentSchedule ? editForm.paymentSchedule : null
+        paymentSchedule: editForm.usePaymentSchedule ? editForm.paymentSchedule : null,
+        instanceOverrides: editForm.instanceOverrides || []
       }
       
       onUpdateRule(editingRule.id, updates)
@@ -368,6 +432,9 @@ export default function RecurringRules({
                           {isOverridden && <Badge color="violet" size="xs">Modified</Badge>}
                           {item.paymentSchedule && item.paymentSchedule.length > 0 && (
                             <Badge color="gray" size="xs">{item.paymentSchedule.length} Phases</Badge>
+                          )}
+                          {item.instanceOverrides && item.instanceOverrides.length > 0 && (
+                            <Badge color="orange" size="xs">{item.instanceOverrides.length} Adj</Badge>
                           )}
                         </Group>
                         {item.description && <Text size="xs" c="dimmed">"{item.description}"</Text>}
@@ -599,6 +666,103 @@ export default function RecurringRules({
                     Tip: Leave End Date empty for ongoing phases. Phases should not overlap.
                   </Text>
                 )}
+              </Stack>
+            </Paper>
+          )}
+
+          {editForm.frequency !== 'One-time' && (
+            <Paper p="md" withBorder>
+              <Stack gap="md">
+                <Group justify="space-between">
+                  <Box>
+                    <Text fw={600}>Date Adjustments</Text>
+                    <Text size="xs" c="dimmed">Move specific payment dates (e.g., March payment hits on 20th instead of 15th)</Text>
+                  </Box>
+                  <Button
+                    size="xs"
+                    variant="light"
+                    onClick={() => {
+                      const newOverride = {
+                        id: Date.now(),
+                        scheduledDate: '',
+                        actualDate: '',
+                        note: ''
+                      }
+                      setEditForm(prev => ({
+                        ...prev,
+                        instanceOverrides: [...prev.instanceOverrides, newOverride]
+                      }))
+                    }}
+                  >
+                    + Add Adjustment
+                  </Button>
+                </Group>
+
+                {editForm.instanceOverrides.length === 0 && (
+                  <Text c="dimmed" size="sm" ta="center">No date adjustments. All payments hit on their scheduled dates.</Text>
+                )}
+
+                {editForm.instanceOverrides.map((override, index) => (
+                  <Paper key={override.id || index} p="sm" withBorder bg="orange.0">
+                    <Stack gap="xs">
+                      <Group justify="space-between">
+                        <Text size="sm" fw={500}>Adjustment {index + 1}</Text>
+                        <Button
+                          size="xs"
+                          color="red"
+                          variant="subtle"
+                          onClick={() => {
+                            setEditForm(prev => ({
+                              ...prev,
+                              instanceOverrides: prev.instanceOverrides.filter((_, i) => i !== index)
+                            }))
+                          }}
+                        >
+                          Remove
+                        </Button>
+                      </Group>
+                      <Group grow>
+                        <Select
+                          label="Scheduled Date"
+                          description="Which payment to move"
+                          size="xs"
+                          placeholder="Select payment date"
+                          data={upcomingPaymentDates}
+                          value={override.scheduledDate || null}
+                          onChange={(val) => {
+                            const updated = [...editForm.instanceOverrides]
+                            updated[index] = { ...updated[index], scheduledDate: val }
+                            setEditForm(prev => ({ ...prev, instanceOverrides: updated }))
+                          }}
+                          searchable
+                        />
+                        <TextInput
+                          label="Actual Date"
+                          description="When it actually hits"
+                          type="date"
+                          size="xs"
+                          value={override.actualDate || ''}
+                          onChange={(e) => {
+                            const updated = [...editForm.instanceOverrides]
+                            updated[index] = { ...updated[index], actualDate: e.target.value }
+                            setEditForm(prev => ({ ...prev, instanceOverrides: updated }))
+                          }}
+                        />
+                      </Group>
+                      <TextInput
+                        label="Note"
+                        size="xs"
+                        value={override.note || ''}
+                        onChange={(e) => {
+                          const updated = [...editForm.instanceOverrides]
+                          updated[index] = { ...updated[index], note: e.target.value }
+                          setEditForm(prev => ({ ...prev, instanceOverrides: updated }))
+                        }}
+                        placeholder="e.g., Delayed due to weekend"
+                      />
+                    </Stack>
+                  </Paper>
+                ))}
               </Stack>
             </Paper>
           )}

@@ -512,8 +512,8 @@ function App() {
     switch (activeHref) {
       case '/dashboard':
         return (
-          <Dashboard 
-            data={data} 
+          <Dashboard
+            data={data}
             onQuickAdd={() => setShowQuickAdd(true)}
             cashFlowStartDate={cashFlowStartDate}
             onStartDateChange={setCashFlowStartDate}
@@ -526,6 +526,7 @@ function App() {
             onDeleteHistoricalCashFlow={handleDeleteHistoricalCashFlow}
             hideEmptyRows={hideEmptyRows}
             onHideEmptyRowsChange={setHideEmptyRows}
+            householdId={currentHouseholdId}
           />
         )
       case '/scenarios':
@@ -560,8 +561,8 @@ function App() {
         )
       default:
         return (
-          <Dashboard 
-            data={data} 
+          <Dashboard
+            data={data}
             onQuickAdd={() => setShowQuickAdd(true)}
             cashFlowStartDate={cashFlowStartDate}
             onStartDateChange={setCashFlowStartDate}
@@ -574,6 +575,7 @@ function App() {
             onDeleteHistoricalCashFlow={handleDeleteHistoricalCashFlow}
             hideEmptyRows={hideEmptyRows}
             onHideEmptyRowsChange={setHideEmptyRows}
+            householdId={currentHouseholdId}
           />
         )
     }

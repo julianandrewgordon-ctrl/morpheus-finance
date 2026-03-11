@@ -1,15 +1,16 @@
-import { useState, useMemo } from 'react'
-import { Paper, Title, Text, Group, Button, Stack, SimpleGrid, Modal, TextInput, Textarea, Alert, Box, Notification } from '@mantine/core'
+import { useState, useMemo, useCallback } from 'react'
+import { Paper, Title, Text, Group, Button, Stack, SimpleGrid, Modal, TextInput, Textarea, Alert, Box, Notification, Tabs } from '@mantine/core'
 import { DateInput } from '@mantine/dates'
 import BalanceChart from './BalanceChart'
 import CashFlowTable from './CashFlowTable'
+import LinkedAccounts from './LinkedAccounts'
 import { calculateCashFlowTable, calculateSummary } from '../utils/cashFlowCalculator'
 import { applyOverridesToRule } from '../utils/ruleOverrides'
 
-export default function Dashboard({ 
-  data, 
-  onQuickAdd, 
-  cashFlowStartDate, 
+export default function Dashboard({
+  data,
+  onQuickAdd,
+  cashFlowStartDate,
   onStartDateChange,
   onAddScenario,
   onUpdateScenario,
@@ -19,7 +20,8 @@ export default function Dashboard({
   onBatchAddHistoricalCashFlows,
   onDeleteHistoricalCashFlow,
   hideEmptyRows,
-  onHideEmptyRowsChange
+  onHideEmptyRowsChange,
+  householdId
 }) {
   const [selectedScenario, setSelectedScenario] = useState('base')
   const [showScenarioModal, setShowScenarioModal] = useState(false)
@@ -33,6 +35,9 @@ export default function Dashboard({
   const [startingBalanceDate, setStartingBalanceDate] = useState(data.startingBalanceDate ? new Date(data.startingBalanceDate) : new Date())
   const [historicalText, setHistoricalText] = useState('')
   const [notification, setNotification] = useState(null)
+  const [balanceTab, setBalanceTab] = useState('manual')
+  const [plaidTotal, setPlaidTotal] = useState(0)
+  const [plaidEffectiveDate, setPlaidEffectiveDate] = useState(new Date().toISOString().split('T')[0])
   const { scenarios } = data
 
   const cashFlowData = useMemo(() => {
@@ -160,6 +165,18 @@ export default function Dashboard({
       showNotification('success', `Starting balance set to $${balance.toLocaleString()} as of ${dateStr}`)
     }
   }
+
+  const handleApplyPlaidBalance = useCallback((total) => {
+    if (total !== undefined) {
+      onUpdateStartingBalance(total, plaidEffectiveDate)
+      setShowStartingBalanceModal(false)
+      showNotification('success', `Starting balance synced to $${total.toLocaleString()} as of ${plaidEffectiveDate}`)
+    }
+  }, [plaidEffectiveDate, onUpdateStartingBalance])
+
+  const handlePlaidTotalChange = useCallback((total) => {
+    setPlaidTotal(total)
+  }, [])
 
   const handleBatchHistoricalUpload = () => {
     try {
@@ -353,27 +370,55 @@ export default function Dashboard({
         </Stack>
       </Modal>
 
-      <Modal opened={showStartingBalanceModal} onClose={() => setShowStartingBalanceModal(false)} title="Set Starting Balance">
-        <Stack>
-          <TextInput
-            label="Starting Balance"
-            description="Enter the balance amount"
-            value={startingBalance}
-            onChange={(e) => setStartingBalance(e.target.value)}
-            type="number"
-            placeholder="15000"
-          />
-          <TextInput
-            label="As of Date"
-            type="date"
-            value={startingBalanceDate ? startingBalanceDate.toISOString().split('T')[0] : ''}
-            onChange={(e) => setStartingBalanceDate(new Date(e.target.value))}
-          />
-          <Group justify="flex-end">
-            <Button variant="subtle" onClick={() => setShowStartingBalanceModal(false)}>Cancel</Button>
-            <Button onClick={handleSaveStartingBalance}>Save</Button>
-          </Group>
-        </Stack>
+      <Modal opened={showStartingBalanceModal} onClose={() => setShowStartingBalanceModal(false)} title="Set Starting Balance" size="lg">
+        <Tabs value={balanceTab} onChange={setBalanceTab}>
+          <Tabs.List>
+            <Tabs.Tab value="manual">Manual Entry</Tabs.Tab>
+            <Tabs.Tab value="bank">Sync from Bank</Tabs.Tab>
+          </Tabs.List>
+
+          <Tabs.Panel value="manual" pt="md">
+            <Stack>
+              <TextInput
+                label="Starting Balance"
+                description="Enter the balance amount"
+                value={startingBalance}
+                onChange={(e) => setStartingBalance(e.target.value)}
+                type="number"
+                placeholder="15000"
+              />
+              <TextInput
+                label="As of Date"
+                type="date"
+                value={startingBalanceDate ? startingBalanceDate.toISOString().split('T')[0] : ''}
+                onChange={(e) => setStartingBalanceDate(new Date(e.target.value))}
+              />
+              <Group justify="flex-end">
+                <Button variant="subtle" onClick={() => setShowStartingBalanceModal(false)}>Cancel</Button>
+                <Button onClick={handleSaveStartingBalance}>Save</Button>
+              </Group>
+            </Stack>
+          </Tabs.Panel>
+
+          <Tabs.Panel value="bank" pt="md">
+            {householdId && householdId !== 'legacy' ? (
+              <LinkedAccounts
+                householdId={householdId}
+                onTotalChange={handlePlaidTotalChange}
+                onApplyBalance={handleApplyPlaidBalance}
+                effectiveDate={plaidEffectiveDate}
+                onEffectiveDateChange={setPlaidEffectiveDate}
+              />
+            ) : (
+              <Stack align="center" gap="md" py="xl">
+                <Text c="dimmed">Bank sync requires a household to be set up.</Text>
+                <Text size="sm" c="dimmed">
+                  Please set up your household in the Household & Sharing section first.
+                </Text>
+              </Stack>
+            )}
+          </Tabs.Panel>
+        </Tabs>
       </Modal>
 
       <Modal opened={showNewScenarioModal} onClose={() => { setShowNewScenarioModal(false); setNewScenarioName(''); }} title="Create New Scenario">
