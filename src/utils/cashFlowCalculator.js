@@ -132,12 +132,13 @@ export function calculateCashFlowTable(rules, startingBalance, startingBalanceDa
         } else {
           // Recurring transaction
           if (!rule.effectiveDate) return // Skip if no effective date
-          
-          effectiveDate = new Date(rule.effectiveDate)
-          endDate = rule.endDate ? new Date(rule.endDate) : null
+
+          // Parse as local time to avoid timezone issues
+          effectiveDate = new Date(rule.effectiveDate + 'T00:00:00')
+          endDate = rule.endDate ? new Date(rule.endDate + 'T00:00:00') : null
         }
       }
-      
+
       // For payment schedule or recurring rules
       if (rule.frequency !== 'One-time' && effectiveDate) {
         const instanceOverrides = rule.instanceOverrides || []
@@ -150,15 +151,18 @@ export function calculateCashFlowTable(rules, startingBalance, startingBalanceDa
           shouldInclude = true
         } else {
           // Check if this would normally be a payment date
+          // Use local date for comparison to match how dates are displayed
+          const localDate = new Date(dateStr + 'T00:00:00')
+
           // Check if date is within rule's active period
-          if (date >= effectiveDate && (!endDate || date <= endDate) && date >= balanceDate) {
+          if (localDate >= effectiveDate && (!endDate || localDate <= endDate) && date >= balanceDate) {
             // Calculate frequency from ORIGINAL effective date
-            const daysSinceEffective = Math.floor((date - effectiveDate) / (1000 * 60 * 60 * 24))
+            const daysSinceEffective = Math.floor((localDate - effectiveDate) / (1000 * 60 * 60 * 24))
             let isScheduledDate = false
 
             if (rule.frequency === 'Monthly') {
               // Monthly on the same day of month as effective date
-              if (date.getDate() === effectiveDate.getDate()) {
+              if (localDate.getDate() === effectiveDate.getDate()) {
                 isScheduledDate = true
               }
             } else if (rule.frequency === 'Bi-weekly') {
